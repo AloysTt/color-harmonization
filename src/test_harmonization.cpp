@@ -1,4 +1,5 @@
 #include <cmath>
+#include <cfloat>
 #include "image_ppm.h"
 
 #include "harmonization.h"
@@ -65,11 +66,11 @@ int main(int argc, char **argv)
 	}
 
 	// debug image
-	/*for (int i=0; i<size; ++i)
+	for (int i=0; i<size; ++i)
 	{
 		imageSectorBorders[i] *=63;
 	}
-	ecrire_image_pgm("lena_test.pgm", imageSectorBorders, h, w);*/
+	ecrire_image_pgm("lena_test.pgm", imageSectorBorders, h, w);
 
 
 	delete [] image;

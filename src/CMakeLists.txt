@@ -15,5 +15,5 @@ add_executable(test_harmonization
 )
 add_custom_command(TARGET test_harmonization PRE_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-    ${CMAKE_SOURCE_DIR}/images/ ${CMAKE_BINARY_DIR}
+    ${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
 )
