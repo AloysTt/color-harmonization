@@ -89,38 +89,7 @@ int main(int argc, char **argv)
 		imageSectorBorders[i] = closestSector;
 	}
 
-	float * gaussianNormalized = new float[size];
-	for (int i=0; i < size; ++i)
-	{
-		ColorRGB rgbIn{(float) image[3 * i] / 255.0f, (float) image[3 * i + 1] / 255.0f,
-					   (float) image[3 * i + 2] / 255.0f};
-		ColorHSV hsv{};
-		rgb_to_hsv(rgbIn, hsv);
-		DistributionColor closestDistribColor = distrib.getColor(imageSectorBorders[i]/2);
-		closestDistribColor.hue+= distrib.getRotation();
-
-		float diff = atan2(
-				sin(rad(hsv.h)-rad(closestDistribColor.hue)),
-				cos(rad(hsv.h)-rad(closestDistribColor.hue))
-			);
-		diff = std::abs(diff)*180.0f/PI;
-
-		gaussianNormalized[i] = gaussian(diff, 0.0f, closestDistribColor.arcWidth/2.0f);
-	}
-	float min = *std::min_element(gaussianNormalized, gaussianNormalized+size);
-	float max = *std::max_element(gaussianNormalized, gaussianNormalized+size);
-	float diff = max - min;
-	for (int i=0; i < size; ++i)
-	{
-		gaussianNormalized[i] += min;
-		gaussianNormalized[i] /= diff;
-	}
-
-
-
-
 	uchar * imageOut = new uchar[size3];
-
 	for (int i=0; i < size; ++i)
 	{
 		ColorRGB rgbIn{(float) image[3 * i] / 255.0f, (float) image[3 * i + 1] / 255.0f,
@@ -131,15 +100,25 @@ int main(int argc, char **argv)
 		DistributionColor closestDistribColor = distrib.getColor(imageSectorBorders[i]/2);
 		closestDistribColor.hue+= distrib.getRotation();
 
+		float diff = atan2(
+			sin(rad(hsv.h)-rad(closestDistribColor.hue)),
+			cos(rad(hsv.h)-rad(closestDistribColor.hue))
+		);
+		diff = diff*180.0f/PI;
+		float absdiff = std::abs(diff);
+		float invmax = 1.0f/gaussian(0.0f, 0.0f, closestDistribColor.arcWidth/2.0f);
+
 		float newHue;
-		if (hsv.h < closestDistribColor.hue)
+		if (diff < 0.0f)
 			newHue = closestDistribColor.hue
 			- (closestDistribColor.arcWidth/2.0f)
-			* (1.0f - gaussianNormalized[i]);
+			* (1.0f -
+				invmax*gaussian(absdiff, 0.0f, closestDistribColor.arcWidth/2.0f));
 		else
 			newHue = closestDistribColor.hue
 					 + (closestDistribColor.arcWidth/2.0f)
-					   * (1.0f - gaussianNormalized[i]);
+					   * (1.0f -
+				invmax*gaussian(absdiff, 0.0f, closestDistribColor.arcWidth/2.0f));
 		hsv.h = newHue;
 
 		ColorRGB rgbOut{};
@@ -149,18 +128,11 @@ int main(int argc, char **argv)
 		imageOut[3 * i + 1] = rgbOut.g  * 255.0f;
 		imageOut[3 * i + 2] = rgbOut.b * 255.0f;
 	}
-	/*// debug image
-	for (int i=0; i<size; ++i)
-	{
-		imageSectorBorders[i] *=63;
-	}
-	ecrire_image_pgm("lena_test.pgm", imageSectorBorders, h, w);*/
 	ecrire_image_ppm((baseName+"_shift.ppm").data(), imageOut, h, w);
 
 
 	delete [] image;
 	delete [] imageSectorBorders;
-	delete [] gaussianNormalized;
 	delete [] imageOut;
 	return 0;
 }
