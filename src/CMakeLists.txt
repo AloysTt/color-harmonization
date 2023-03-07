@@ -28,3 +28,13 @@ add_custom_command(TARGET test_select_color PRE_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
 	${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
 )
+
+add_executable(histogram_h
+	histogram_h.cpp
+	HSV.h HSV.cpp
+	image_ppm.h
+)
+add_custom_command(TARGET histogram_h PRE_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+	${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
+)
