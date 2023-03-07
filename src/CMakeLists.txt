@@ -7,13 +7,24 @@ add_executable(test_hsv
     HSV.h HSV.cpp
 )
 
-add_executable(test_harmonization
-    test_harmonization.cpp
+add_executable(test_sector_borders
+	test_sector_borders.cpp
     harmonization.h harmonization.cpp
     HSV.h HSV.cpp
     image_ppm.h
 )
-add_custom_command(TARGET test_harmonization PRE_BUILD
+add_custom_command(TARGET test_sector_borders PRE_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
     ${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+add_executable(test_select_color
+	test_select_color.cpp
+	harmonization.h harmonization.cpp
+	HSV.h HSV.cpp
+	image_ppm.h
+)
+add_custom_command(TARGET test_select_color PRE_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+	${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
 )

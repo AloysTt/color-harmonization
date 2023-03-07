@@ -12,7 +12,7 @@ typedef unsigned char uchar;
 
 int main(int argc, char **argv)
 {
-	Distribution distrib = Distribution::create_I_template(0, 2);
+	Distribution distrib = Distribution::create_i_template(90, 2);
 	int h, w, size3, size;
 	lire_nb_lignes_colonnes_image_ppm("lena.ppm", &h, &w);
 	size3 = h * w * 3;
