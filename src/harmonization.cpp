@@ -29,3 +29,13 @@ float Distribution::getSectorBorder1(unsigned int colorIndex) const {
 float Distribution::getSectorBorder2(unsigned int colorIndex) const {
 	return std::fmod(rotationAngle+colors[colorIndex].hue+colors[colorIndex].arcWidth/2.0f, 360.0f);
 }
+
+const DistributionColor & Distribution::getColor(unsigned int index) const
+{
+	return colors[index];
+}
+
+float Distribution::getRotation() const
+{
+	return rotationAngle;
+}

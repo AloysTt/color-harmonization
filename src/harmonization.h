@@ -25,6 +25,9 @@ public:
 	float getSectorBorder1(unsigned int colorIndex) const;
 	float getSectorBorder2(unsigned int colorIndex) const;
 
+	const DistributionColor & getColor(unsigned int index) const;
+	float getRotation() const;
+
 	static Distribution create_I_template(float angle, float arcWidth);
 	static Distribution create_i_template(float angle, float arcWidth);
 private:
