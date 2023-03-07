@@ -29,6 +29,17 @@ add_custom_command(TARGET test_select_color PRE_BUILD
 	${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
 )
 
+add_executable(test_shift
+	test_shift.cpp
+	harmonization.h harmonization.cpp
+	HSV.h HSV.cpp
+	image_ppm.h
+)
+add_custom_command(TARGET test_shift PRE_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+	${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
+)
+
 add_executable(histogram_h
 	histogram_h.cpp
 	HSV.h HSV.cpp
