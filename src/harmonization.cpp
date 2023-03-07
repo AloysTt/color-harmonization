@@ -11,6 +11,13 @@ Distribution Distribution::create_I_template(float angle, float arcWidth) {
 	return d;
 }
 
+Distribution Distribution::create_i_template(float angle, float arcWidth) {
+	Distribution d;
+	d.colors.push_back(DistributionColor{0, arcWidth});
+	d.rotationAngle = std::fmod(angle, 360.0f);
+	return d;
+}
+
 unsigned int Distribution::getColorCount() const {
 	return colors.size();
 }

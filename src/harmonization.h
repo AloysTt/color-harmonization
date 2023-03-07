@@ -26,6 +26,7 @@ public:
 	float getSectorBorder2(unsigned int colorIndex) const;
 
 	static Distribution create_I_template(float angle, float arcWidth);
+	static Distribution create_i_template(float angle, float arcWidth);
 private:
 	std::vector<DistributionColor> colors;
 	float rotationAngle;
