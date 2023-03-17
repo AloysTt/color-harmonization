@@ -35,4 +35,8 @@ private:
 	float rotationAngle;
 };
 
+void shift(const Distribution & distrib, int h, int w, const unsigned char *image, unsigned char *imageOut);
+void find_sector_borders(const Distribution & distrib, const unsigned char *image, int size,
+						 unsigned char *imageSectorBorders);
+
 #endif // HARMONIZATION_H

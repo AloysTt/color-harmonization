@@ -33,6 +33,7 @@ add_executable(test_shift
 	test_shift.cpp
 	harmonization.h harmonization.cpp
 	HSV.h HSV.cpp
+	util.h
 	image_ppm.h
 )
 add_custom_command(TARGET test_shift PRE_BUILD
