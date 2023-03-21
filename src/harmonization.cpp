@@ -2,20 +2,24 @@
 #include "HSV.h"
 #include <cmath>
 #include <cfloat>
+#include <iostream>
+#include <cstring>
 #include "util.h"
+#include "KMean.h"
+
 
 Distribution Distribution::create_I_template(float angle, float arcWidth) {
 	Distribution d;
 	d.colors.push_back(DistributionColor{0, arcWidth});
 	d.colors.push_back(DistributionColor{180.0f, arcWidth});
-	d.rotationAngle = std::fmod(angle, 360.0f);
+	d.rotationAngle = std::fmod(360.0f+angle, 360.0f);
 	return d;
 }
 
 Distribution Distribution::create_i_template(float angle, float arcWidth) {
 	Distribution d;
 	d.colors.push_back(DistributionColor{0, arcWidth});
-	d.rotationAngle = std::fmod(angle, 360.0f);
+	d.rotationAngle = std::fmod(360.0f+angle, 360.0f);
 	return d;
 }
 
@@ -24,11 +28,11 @@ unsigned int Distribution::getColorCount() const {
 }
 
 float Distribution::getSectorBorder1(unsigned int colorIndex) const {
-	return std::fmod(rotationAngle+colors[colorIndex].hue-colors[colorIndex].arcWidth/2.0f, 360.0f);
+	return std::fmod(360.0f+rotationAngle+colors[colorIndex].hue-colors[colorIndex].arcWidth/2.0f, 360.0f);
 }
 
 float Distribution::getSectorBorder2(unsigned int colorIndex) const {
-	return std::fmod(rotationAngle+colors[colorIndex].hue+colors[colorIndex].arcWidth/2.0f, 360.0f);
+	return std::fmod(360.0f+rotationAngle+colors[colorIndex].hue+colors[colorIndex].arcWidth/2.0f, 360.0f);
 }
 
 const DistributionColor & Distribution::getColor(unsigned int index) const
@@ -41,11 +45,22 @@ float Distribution::getRotation() const
 	return rotationAngle;
 }
 
+void Distribution::addColor(float hue, float arcWidth)
+{
+	colors.push_back(DistributionColor{hue, arcWidth});
+}
+
+Distribution::Distribution()
+: colors()
+, rotationAngle(0)
+{
+}
+
 void shift(const Distribution & distrib, int h, int w, const unsigned char *image, unsigned char *imageOut)
 {
 	int size = h*w;
 	unsigned char *imageSectorBorders = new unsigned char[size];
-	find_sector_borders(distrib, image, size, imageSectorBorders);
+	find_sector_borders(distrib, image, imageSectorBorders, h, w);
 
 	for (int i=0; i < size; ++i)
 	{
@@ -90,10 +105,12 @@ void shift(const Distribution & distrib, int h, int w, const unsigned char *imag
 	delete [] imageSectorBorders;
 }
 
-void find_sector_borders(const Distribution & distrib, const unsigned char *image, int size,
-						 unsigned char *imageSectorBorders)
+void
+find_sector_borders(const Distribution & distrib, const unsigned char *image, unsigned char *imageSectorBorders, int h,
+					int w)
 {
 	int colorCount = distrib.getColorCount();
+	int size = h*w;
 	// assign each pixel to a sector border
 	// there are 2 borders for each sector (and 1 sector per color)
 	// ex: 0 and 1 are borders for the color 0; 2 and 3 for the color 1
@@ -136,4 +153,122 @@ void find_sector_borders(const Distribution & distrib, const unsigned char *imag
 		}
 		imageSectorBorders[i] = closestSector;
 	}
+}
+
+void KMeanShift(HarmonyType type, int h, int w, const unsigned char *image, unsigned char *imageOut)
+{
+	int nbColors;
+	switch (type)
+	{
+		case HarmonyType::COMPLEMENTARY:
+			nbColors = 2;
+			break;
+		case HarmonyType::TRIADIC:
+			nbColors = 3;
+			break;
+		case HarmonyType::TETRADIC_RECTANGLE:
+			nbColors = 4;
+			break;
+		case HarmonyType::TETRADIC_SQUARE:
+			nbColors = 4;
+			break;
+		case HarmonyType::SPLIT_COMPLEMENTARY:
+			nbColors = 3;
+			break;
+		case HarmonyType::ANALOGOUS:
+			nbColors = 3;
+			break;
+		default:
+			break;
+	}
+
+	int size = h*w;
+	uint * classes = new uint[size];
+	ColorRGB * colors = new ColorRGB[nbColors];
+	KMean(image, classes, colors, nbColors, h, w);
+
+	// find which color has more pixels
+	uint * pxCount = new uint[nbColors];
+	std::memset(pxCount, 0, nbColors);
+	for (int i=0; i<size; ++i)
+		++pxCount[classes[i]];
+	int max = -1;
+	int maxVal = -1;
+	for (int i=0; i<nbColors; ++i)
+	{
+		if (pxCount[i] > maxVal)
+		{
+			max = i;
+			maxVal = pxCount[i];
+		}
+	}
+	delete [] pxCount;
+
+	ColorHSV * colorsHSV = new ColorHSV[nbColors];
+	for (int i=0; i<2; ++i)
+		rgb_to_hsv(colors[i], colorsHSV[i]);
+
+	switch (type)
+	{
+		case HarmonyType::COMPLEMENTARY:
+		{
+			Distribution distrib;
+			distrib.addColor(colorsHSV[max].h, 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+180.0f, 360.0f), 18.0f);
+			shift(distrib, h, w, image, imageOut);
+		}
+			break;
+		case HarmonyType::TRIADIC:
+		{
+			Distribution distrib;
+			distrib.addColor(colorsHSV[max].h, 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+120.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+240.0f, 360.0f), 18.0f);
+			shift(distrib, h, w, image, imageOut);
+		}
+			break;
+		case HarmonyType::TETRADIC_RECTANGLE:
+		{
+			Distribution distrib;
+			distrib.addColor(colorsHSV[max].h, 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+60.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+180.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+240.0f, 360.0f), 18.0f);
+			shift(distrib, h, w, image, imageOut);
+		}
+			break;
+		case HarmonyType::TETRADIC_SQUARE:
+		{
+			Distribution distrib;
+			distrib.addColor(colorsHSV[max].h, 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+90.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+180.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+270.0f, 360.0f), 18.0f);
+			shift(distrib, h, w, image, imageOut);
+		}
+			break;
+		case HarmonyType::SPLIT_COMPLEMENTARY:
+		{
+			Distribution distrib;
+			distrib.addColor(colorsHSV[max].h, 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+150.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+210.0f, 360.0f), 18.0f);
+			shift(distrib, h, w, image, imageOut);
+		}
+			break;
+		case HarmonyType::ANALOGOUS:
+		{
+			Distribution distrib;
+			distrib.addColor(colorsHSV[max].h, 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h-30.0f+360.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+30.0f, 360.0f), 18.0f);
+			shift(distrib, h, w, image, imageOut);
+		}
+			break;
+		default:
+			break;
+	}
+	delete [] classes;
+	delete [] colorsHSV;
+	delete [] colors;
 }

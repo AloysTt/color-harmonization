@@ -10,6 +10,7 @@ add_executable(test_hsv
 add_executable(test_sector_borders
 	test_sector_borders.cpp
     harmonization.h harmonization.cpp
+	KMean.h KMean.cpp
     HSV.h HSV.cpp
     image_ppm.h
 )
@@ -21,6 +22,7 @@ add_custom_command(TARGET test_sector_borders PRE_BUILD
 add_executable(test_select_color
 	test_select_color.cpp
 	harmonization.h harmonization.cpp
+	KMean.h KMean.cpp
 	HSV.h HSV.cpp
 	image_ppm.h
 )
@@ -32,6 +34,7 @@ add_custom_command(TARGET test_select_color PRE_BUILD
 add_executable(test_shift
 	test_shift.cpp
 	harmonization.h harmonization.cpp
+	KMean.h KMean.cpp
 	HSV.h HSV.cpp
 	util.h
 	image_ppm.h
@@ -49,4 +52,18 @@ add_executable(histogram_h
 add_custom_command(TARGET histogram_h PRE_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
 	${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+add_executable(test_kmean
+	test_kmean.cpp
+	harmonization.h harmonization.cpp
+	KMean.h KMean.cpp
+	HSV.h HSV.cpp
+	util.h
+	image_ppm.h
+	)
+add_custom_command(TARGET test_kmean PRE_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+	${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
+	)
 )
