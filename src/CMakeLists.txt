@@ -66,4 +66,3 @@ add_custom_command(TARGET test_kmean PRE_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
 	${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
 	)
-)
