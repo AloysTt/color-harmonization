@@ -86,3 +86,12 @@ void ycbcr_to_rgb(const ColorYCbCr & ycbcr, ColorRGB & rgb)
 	rgb.g = 0.00456621 * y -0.00153632*cb -0.00318811*cr;
 	rgb.b = 0.00456621 * y + 0.00791071*cb;
 }
+
+float ycbcr_distance_relative_euclidean(float y1, float cb1, float cr1, float y2, float cb2, float cr2)
+{
+	return std::sqrt(
+			(y1-y2)*(y1-y2)
+			+ (cb1-cb2)*(cb1-cb2)
+			+ (cr1-cr2)*(cr1-cr2))
+		/ std::sqrt(y1*y1 + cb1*cb1 + cr1*cr1);
+}
