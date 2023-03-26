@@ -7,6 +7,11 @@ add_executable(test_hsv
 	ColorSpaces.h ColorSpaces.cpp
 )
 
+add_executable(test_ycbcr
+	test_ycbcr.cpp
+	ColorSpaces.h ColorSpaces.cpp
+)
+
 add_executable(test_sector_borders
 	test_sector_borders.cpp
     harmonization.h harmonization.cpp

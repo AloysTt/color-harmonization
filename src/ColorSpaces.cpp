@@ -67,3 +67,22 @@ void hsv_to_rgb(const ColorHSV & hsv, ColorRGB & rgb)
 	rgb.g = f(3.0f);
 	rgb.b = f(1.0f);
 }
+
+
+void rgb_to_ycbcr(const ColorRGB & rgb, ColorYCbCr & ycbcr)
+{
+	ycbcr.y = 65.481*rgb.r + 128.553*rgb.g + 24.966*rgb.b + 16;
+	ycbcr.cb = -39.797*rgb.r -74.203*rgb.g + 112.0*rgb.b + 128;
+	ycbcr.cr = 112*rgb.r -93.786*rgb.g - 18.214 * rgb.b + 128;
+}
+
+void ycbcr_to_rgb(const ColorYCbCr & ycbcr, ColorRGB & rgb)
+{
+	float y = ycbcr.y - 16;
+	float cb = ycbcr.cb - 128;
+	float cr = ycbcr.cr - 128;
+
+	rgb.r = 0.00456621 * y + 0.00625893*cr;
+	rgb.g = 0.00456621 * y -0.00153632*cb -0.00318811*cr;
+	rgb.b = 0.00456621 * y + 0.00791071*cb;
+}
