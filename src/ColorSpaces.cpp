@@ -1,4 +1,4 @@
-#include "HSV.h"
+#include "ColorSpaces.h"
 
 #include <cmath>
 

@@ -1,5 +1,5 @@
 #include <iostream>
-#include "HSV.h"
+#include "ColorSpaces.h"
 
 int main(int argc, char **argv)
 {

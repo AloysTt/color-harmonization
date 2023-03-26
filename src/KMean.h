@@ -1,7 +1,7 @@
 #ifndef KMEAN_H
 #define KMEAN_H
 
-#include "HSV.h"
+#include "ColorSpaces.h"
 
 //
 // indexImage and colors have to be initialized

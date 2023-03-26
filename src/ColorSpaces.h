@@ -1,5 +1,5 @@
-#ifndef HSV_H
-#define HSV_H
+#ifndef COLORSPACES_H
+#define COLORSPACES_H
 
 struct ColorRGB
 {
@@ -28,4 +28,4 @@ struct ColorHSV
 void rgb_to_hsv(const ColorRGB & rgb, ColorHSV & hsv);
 void hsv_to_rgb(const ColorHSV & hsv, ColorRGB & rgb);
 
-#endif // HSV_H
+#endif // COLORSPACES_H

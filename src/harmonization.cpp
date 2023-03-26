@@ -1,5 +1,5 @@
 #include "harmonization.h"
-#include "HSV.h"
+#include "ColorSpaces.h"
 #include <cmath>
 #include <cfloat>
 #include <iostream>

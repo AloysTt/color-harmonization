@@ -1,7 +1,7 @@
 #include <iostream>
 #include <vector>
 #include "image_ppm.h"
-#include "HSV.h"
+#include "ColorSpaces.h"
 
 using namespace std;
 typedef unsigned char uchar;
@@ -98,9 +98,9 @@ double otsu(uchar* ImgIn, int k, int nH, int nW){
     double v0 = 0;
     double v1 = 0;
     double w1, probi, ur, u0, u1;
-    taille = nH*nW;
+    int taille = nH*nW;
 
-    for(int i=0 i<k; i++){
+    for(int i=0; i<k; i++){
         probi = T[i]/taille;
         w0+=probi;
         u+=i*probi;
