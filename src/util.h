@@ -18,11 +18,25 @@ inline float rad(float angle)
 	return angle*PI/180.0f;
 }
 
-inline void histo(const uint *ImgIn, uint* T, int h, int w)
+// tab contents must be initialized to 0
+inline void create_histo(const uint *image, int h, int w, uint *tab)
 {
 	int size = h * w;
 	for (int i=0; i < size; i++)
-		++T[ImgIn[i]];
+		++tab[image[i]];
+}
+
+inline void create_ddp(const uint *image, int h, int w, double *tab, int tabLength)
+{
+	uint * histogram = new uint[tabLength];
+	std::memset(histogram, 0u, tabLength*sizeof(uint));
+	create_histo(image, h, w, histogram);
+
+	int size = h*w;
+	for (int i=0; i<tabLength; ++i)
+		tab[i] = (double)histogram[i]/(double)size;
+
+	delete [] histogram;
 }
 
 #endif // UTIL_H

@@ -93,15 +93,9 @@ void ycbcrTorgb(uchar* ImgIn, uchar* ImgOut){
 double otsu(const uint* ImgIn, int h, int w, int k, int histogramSize){
     int size = h * w;
 
-	// histogram
-    uint * his = new uint[histogramSize];
-	memset(his, 0u, histogramSize*sizeof(uint));
-    histo(ImgIn, his, h, w);
-
 	// probability distribution
 	double * ddp = new double[histogramSize];
-	for (int i=0; i<histogramSize; ++i)
-		ddp[i] = (double)his[i]/(double)size;
+	create_ddp(ImgIn, h, w, ddp, histogramSize);
 
     double w0, u;
     w0 = u = 0.0;
@@ -135,7 +129,6 @@ double otsu(const uint* ImgIn, int h, int w, int k, int histogramSize){
 //		TV += ((double)i-ut)*((double)i-ut)*ddp[i];
 
 	delete [] ddp;
-	delete [] his;
 
     return BCV/WCV;
 }
