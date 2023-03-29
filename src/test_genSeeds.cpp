@@ -245,12 +245,7 @@ int main(int argc, char **argv)
 
 	// convert to ycbcr float
 	float * imageYCbCr = new float[size3];
-	for (int i=0; i<size; ++i)
-	{
-		ColorYCbCr * ycbcr = new (imageYCbCr+3*i) ColorYCbCr;
-		ColorRGB rgb{image[3*i]/255.0f, image[3*i+1]/255.0f, image[3*i+2]/255.0f};
-		rgb_to_ycbcr(rgb, *ycbcr);
-	}
+	rgb_to_ycbcr(image, imageYCbCr, h, w);
 
 	// get std dev for each pixel
 	float * imageSimilarity = new float[size];

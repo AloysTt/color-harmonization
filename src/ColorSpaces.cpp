@@ -76,6 +76,18 @@ void rgb_to_ycbcr(const ColorRGB & rgb, ColorYCbCr & ycbcr)
 	ycbcr.cr = 112*rgb.r -93.786*rgb.g - 18.214 * rgb.b + 128;
 }
 
+void rgb_to_ycbcr(const unsigned char * image, float * imageYCbCr, int h, int w)
+{
+	int size = h*w;
+	int size3 = size*3;
+	for (int i=0; i<size; ++i)
+	{
+		ColorYCbCr * ycbcr = new (imageYCbCr+3*i) ColorYCbCr;
+		ColorRGB rgb{image[3*i]/255.0f, image[3*i+1]/255.0f, image[3*i+2]/255.0f};
+		rgb_to_ycbcr(rgb, *ycbcr);
+	}
+}
+
 void ycbcr_to_rgb(const ColorYCbCr & ycbcr, ColorRGB & rgb)
 {
 	float y = ycbcr.y - 16;
