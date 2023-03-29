@@ -90,12 +90,8 @@ void ycbcrTorgb(uchar* ImgIn, uchar* ImgOut){
 }*/
 
 
-double otsu(const uint* ImgIn, int h, int w, int k, int histogramSize){
+double otsu(const uint* ImgIn, int h, int w, int k, double *ddp, int grayLevelCount){
     int size = h * w;
-
-	// probability distribution
-	double * ddp = new double[histogramSize];
-	create_ddp(ImgIn, h, w, ddp, histogramSize);
 
     double w0, u;
     w0 = u = 0.0;
@@ -107,7 +103,7 @@ double otsu(const uint* ImgIn, int h, int w, int k, int histogramSize){
     double w1 = 1.0-w0;
 
     double ut = u;
-    for (int i=k+1; i<histogramSize; i++)
+    for (int i=k+1; i < grayLevelCount; i++)
 		ut += i * ddp[i];
 
     double u0 = u/w0;
@@ -118,17 +114,15 @@ double otsu(const uint* ImgIn, int h, int w, int k, int histogramSize){
     for(int i=0; i<=k; i++)
         v0 += ((double)i-u0)*((double)i-u0)
 			* (ddp[i] / w0);
-    for(int i=k+1; i<histogramSize; i++)
+    for(int i=k+1; i < grayLevelCount; i++)
         v1 += ((double)i-u1)*((double)i-u1)
 			* (ddp[i] / w1);
 
     double WCV = w0*v0+w1*v1;
     double BCV = w0*w1*(u1-u0)*(u1-u0);
 //    double TV = 0;
-//	for (int i=0; i<histogramSize; ++i)
+//	for (int i=0; i<grayLevelCount; ++i)
 //		TV += ((double)i-ut)*((double)i-ut)*ddp[i];
-
-	delete [] ddp;
 
     return BCV/WCV;
 }
@@ -288,9 +282,13 @@ int main(int argc, char **argv)
 		imageOtsu[i] = 99.0f*imageSimilarity[i];
 	int threshold = 0;
 	double thresholdVal = 0;
+
+	// probability distribution
+	double * ddp = new double[100];
+	create_ddp(imageOtsu, h, w, ddp, 100);
 	for (int i=0; i<100; ++i)
 	{
-		double otsuVal = otsu(imageOtsu, h, w, i, 100);
+		double otsuVal = otsu(imageOtsu, h, w, i, ddp, 100);
 		std::cout << "Threshold " << std::to_string(i) << ": " << std::to_string(otsuVal) << std::endl;
 		if (otsuVal > thresholdVal)
 		{
@@ -298,6 +296,7 @@ int main(int argc, char **argv)
 			thresholdVal = otsuVal;
 		}
 	}
+	delete [] ddp;
 
 	// create binary seed image
 	uchar * imageSeedOtsu = new uchar[size];
