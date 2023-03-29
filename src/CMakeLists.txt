@@ -76,6 +76,7 @@ add_custom_command(TARGET test_kmean PRE_BUILD
 add_executable(test_genSeeds
 	test_genSeeds.cpp
 	harmonization.h harmonization.cpp
+	segmentation.h segmentation.cpp
 	KMean.h KMean.cpp
 	ColorSpaces.h ColorSpaces.cpp
 	util.h
