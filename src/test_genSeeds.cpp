@@ -91,42 +91,6 @@ void ycbcrTorgb(uchar* ImgIn, uchar* ImgOut){
 }*/
 
 
-double otsu(const uint* ImgIn, int h, int w, int k, double *ddp, int grayLevelCount){
-    int size = h * w;
-
-    double w0, u;
-    w0 = u = 0.0;
-    for(int i=0; i<=k; ++i)
-	{
-        w0+=ddp[i];
-        u+=i*ddp[i];
-    }
-    double w1 = 1.0-w0;
-
-    double ut = u;
-    for (int i=k+1; i < grayLevelCount; i++)
-		ut += i * ddp[i];
-
-    double u0 = u/w0;
-    double u1 = (ut - u) / w1;
-
-	double v0 = 0;
-	double v1 = 0;
-    for(int i=0; i<=k; i++)
-        v0 += ((double)i-u0)*((double)i-u0)
-			* (ddp[i] / w0);
-    for(int i=k+1; i < grayLevelCount; i++)
-        v1 += ((double)i-u1)*((double)i-u1)
-			* (ddp[i] / w1);
-
-    double WCV = w0*v0+w1*v1;
-    double BCV = w0*w1*(u1-u0)*(u1-u0);
-//    double TV = 0;
-//	for (int i=0; i<grayLevelCount; ++i)
-//		TV += ((double)i-ut)*((double)i-ut)*ddp[i];
-
-    return BCV/WCV;
-}
 /*
 double autoSeuil(uchar* ImgIn, int nH, int nW){
     //int seuil;
@@ -271,7 +235,7 @@ int main(int argc, char **argv)
 	create_ddp(imageOtsu, h, w, ddp, 100);
 	for (int i=0; i<100; ++i)
 	{
-		double otsuVal = otsu(imageOtsu, h, w, i, ddp, 100);
+		double otsuVal = otsu(i, ddp, 100, OtsuCriterion::BCW_WCV);
 		std::cout << "Threshold " << std::to_string(i) << ": " << std::to_string(otsuVal) << std::endl;
 		if (otsuVal > thresholdVal)
 		{
