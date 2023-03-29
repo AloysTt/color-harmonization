@@ -211,55 +211,18 @@ int main(int argc, char **argv)
 	float * imageYCbCr = new float[size3];
 	rgb_to_ycbcr(image, imageYCbCr, h, w);
 
-	// get std dev for each pixel
-	float * imageSimilarity = new float[size];
-	computeSimilarityImage(imageYCbCr, imageSimilarity, h, w);
+//	// DEBUG: write similarity image
+//	uchar * testImageSimilarity = new uchar[size];
+//	for (int i=0; i<size; ++i)
+//		testImageSimilarity[i] = 255.0f * imageSimilarity[i];
+//	ecrire_image_pgm((baseName+"_similarity.pgm").data(), testImageSimilarity, h, w);
+//	delete [] testImageSimilarity;
 
-	// DEBUG: write similarity image
-	uchar * testImageSimilarity = new uchar[size];
-	for (int i=0; i<size; ++i)
-		testImageSimilarity[i] = 255.0f * imageSimilarity[i];
-	ecrire_image_pgm((baseName+"_similarity.pgm").data(), testImageSimilarity, h, w);
-	delete [] testImageSimilarity;
-
-	// find threshold using otsu
-	// we first have to split the image into N buckets (here N=100)
-	uint * imageOtsu = new uint[size];
-	for (int i=0; i<size; ++i)
-		imageOtsu[i] = 99.0f*imageSimilarity[i];
-	int threshold = 0;
-	double thresholdVal = 0;
-
-	// probability distribution
-	double * ddp = new double[100];
-	create_ddp(imageOtsu, h, w, ddp, 100);
-	for (int i=0; i<100; ++i)
-	{
-		double otsuVal = otsu(i, ddp, 100, OtsuCriterion::BCW_WCV);
-		std::cout << "Threshold " << std::to_string(i) << ": " << std::to_string(otsuVal) << std::endl;
-		if (otsuVal > thresholdVal)
-		{
-			threshold = i;
-			thresholdVal = otsuVal;
-		}
-	}
-	delete [] ddp;
-
-	// create binary seed image
-	uchar * imageSeedOtsu = new uchar[size];
-	for (int i=0; i<size; ++i)
-		imageSeedOtsu[i] = imageOtsu[i] >= threshold ? 255 : 0;
-	std::cout << "Max threshold: " << std::to_string(threshold) << std::endl;
-
-	// 2nd condition : euclidean distance
 	uchar * imageSeed = new uchar[size];
-	getSeedImageFromOtsuSeeds(imageSeedOtsu, imageYCbCr, imageSeed, h, w, 0.02f);
+	computeSeeds(imageYCbCr, imageSeed, h, w, 100, 0.02f);
 	ecrire_image_pgm((baseName+"_seeds.pgm").data(), imageSeed, h, w);
 
 	delete [] imageSeed;
-	delete [] imageSeedOtsu;
-	delete [] imageOtsu;
-	delete [] imageSimilarity;
 	delete [] imageYCbCr;
 	delete [] image;
 
@@ -291,38 +254,3 @@ int main(int argc, char **argv)
 
 
 
-void getSeedImageFromOtsuSeeds(const uchar * otsu, const float * imageYCbCr, uchar * out, int h, int w, float maxDistance)
-{
-	for (int row=1; row<h-1; ++row)
-	{
-		for (int col=1; col<w-1; ++col)
-		{
-			if (otsu[row*w+col] == 0)
-			{
-				out[row*w+col] = 0;
-				continue;
-			}
-			float max = 0.0f;
-			for (int i=-1; i<=1; ++i)
-			{
-				for (int j=-1; j<=1; ++j)
-				{
-					float dist = ycbcr_distance_relative_euclidean(
-						imageYCbCr[row*w*3+col*3],
-						imageYCbCr[row*w*3+col*3+1],
-						imageYCbCr[row*w*3+col*3+2],
-						imageYCbCr[(row+i)*w*3+(col+j)*3],
-						imageYCbCr[(row+i)*w*3+(col+j)*3+1],
-						imageYCbCr[(row+i)*w*3+(col+j)*3+2]
-						);
-					if (dist > max)
-						max = dist;
-				}
-			}
-			if (max > maxDistance)
-				out[row*w+col] = 0;
-			else
-				out[row*w+col] = 255;
-		}
-	}
-}

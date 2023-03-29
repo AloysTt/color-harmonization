@@ -1,4 +1,6 @@
 #include "segmentation.h"
+#include "util.h"
+#include "ColorSpaces.h"
 #include <cmath>
 #include <cstring>
 #include <algorithm>
@@ -112,4 +114,89 @@ double otsu(int k, double *ddp, int grayLevelCount, OtsuCriterion criterion)
 		default:
 			return 0;
 	}
+}
+
+void computeSeedsFromSimilarity(const float *imageYCbCr, const float *imageSimilarity, unsigned char *imageSeeds, int h, int w, unsigned int otsuBuckets, float maxEuclideanDistance)
+{
+	int size = h*w;
+	// split similarity image into buckets
+	uint * imageOtsu = new uint[size];
+	for (int i=0; i<size; ++i)
+		imageOtsu[i] = static_cast<float>(otsuBuckets-1)*imageSimilarity[i];
+
+	// compute ddp
+	double * ddp = new double[otsuBuckets];
+	create_ddp(imageOtsu, h, w, ddp, otsuBuckets);
+
+	// get threshold using Otsu's method
+	int threshold = 0;
+	double thresholdVal = 0;
+	for (int i=0; i<otsuBuckets; ++i)
+	{
+		double otsuVal = otsu(i, ddp, otsuBuckets, OtsuCriterion::BCW_WCV);
+		if (otsuVal > thresholdVal)
+		{
+			threshold = i;
+			thresholdVal = otsuVal;
+		}
+	}
+
+	// create binary seed image
+	unsigned char * imageSeedOtsu = new unsigned char[size];
+	for (int i=0; i<size; ++i)
+		imageSeedOtsu[i] = imageOtsu[i] >= threshold ? 255 : 0;
+
+	// 2nd condition : euclidean distance
+	filterOtsuSeedsEuclidean(imageYCbCr, imageSeedOtsu, imageSeeds, h, w, maxEuclideanDistance);
+
+	delete [] imageSeedOtsu;
+	delete [] imageOtsu;
+	delete [] ddp;
+}
+
+void filterOtsuSeedsEuclidean(const float *imageYCbCr, const unsigned char *imageSeedOtsu, unsigned char * out, int h, int w, float maxEuclideanDistance)
+{
+	for (int row=1; row<h-1; ++row)
+	{
+		for (int col=1; col<w-1; ++col)
+		{
+			if (imageSeedOtsu[row*w+col] == 0)
+			{
+				out[row*w+col] = 0;
+				continue;
+			}
+			float max = 0.0f;
+			for (int i=-1; i<=1; ++i)
+			{
+				for (int j=-1; j<=1; ++j)
+				{
+					float dist = ycbcr_distance_relative_euclidean(
+						imageYCbCr[row*w*3+col*3],
+						imageYCbCr[row*w*3+col*3+1],
+						imageYCbCr[row*w*3+col*3+2],
+						imageYCbCr[(row+i)*w*3+(col+j)*3],
+						imageYCbCr[(row+i)*w*3+(col+j)*3+1],
+						imageYCbCr[(row+i)*w*3+(col+j)*3+2]
+					);
+					if (dist > max)
+						max = dist;
+				}
+			}
+			if (max > maxEuclideanDistance)
+				out[row*w+col] = 0;
+			else
+				out[row*w+col] = 255;
+		}
+	}
+}
+
+void computeSeeds(const float *imageYCbCr, unsigned char *imageSeeds, int h, int w, unsigned int otsuBuckets, float maxEuclideanDistance)
+{
+	int size = h*w;
+	float * imageSimilarity = new float[size];
+	computeSimilarityImage(imageYCbCr, imageSimilarity, h, w);
+
+	computeSeedsFromSimilarity(imageYCbCr, imageSimilarity, imageSeeds, h, w, otsuBuckets, maxEuclideanDistance);
+
+	delete [] imageSimilarity;
 }
