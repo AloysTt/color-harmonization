@@ -4,6 +4,7 @@
 #include <algorithm>
 #include "image_ppm.h"
 #include "ColorSpaces.h"
+#include "util.h"
 
 typedef unsigned char uchar;
 typedef unsigned int uint;
@@ -88,11 +89,6 @@ void ycbcrTorgb(uchar* ImgIn, uchar* ImgOut){
     }
 }*/
 
-void histo(const uint *ImgIn, uint* T, int nH, int nW){
-    int taille = nH*nW;
-    for (int i=0; i < taille; i++)
-	    T[ImgIn[i]]++;
-}
 
 double otsu(const uint* ImgIn, int h, int w, int k, int histogramSize){
     int size = h * w;
