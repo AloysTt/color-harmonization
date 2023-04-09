@@ -107,3 +107,12 @@ float ycbcr_distance_relative_euclidean(float y1, float cb1, float cr1, float y2
 			+ (cr1-cr2)*(cr1-cr2))
 		/ std::sqrt(y1*y1 + cb1*cb1 + cr1*cr1);
 }
+
+double ycbcr_distance_relative_euclidean_squared(float y1, float cb1, float cr1, float y2, float cb2, float cr2)
+{
+	return (
+		((double)y1-(double)y2)*((double)y1-(double)y2)
+		+ ((double)cb1-(double)cb2)*((double)cb1-(double)cb2)
+		+ ((double)cr1-(double)cr2)*((double)cr1-(double)cr2))
+		   / ((double)y1*(double)y1 + (double)cb1*(double)cb1 + (double)cr1*(double)cr1);
+}

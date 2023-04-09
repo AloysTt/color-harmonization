@@ -86,3 +86,18 @@ add_custom_command(TARGET test_genSeeds PRE_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
 	${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
 )
+
+
+add_executable(test_createRegions
+	test_createRegions.cpp
+	harmonization.h harmonization.cpp
+	segmentation.h segmentation.cpp
+	KMean.h KMean.cpp
+	ColorSpaces.h ColorSpaces.cpp
+	util.h
+	image_ppm.h
+)
+add_custom_command(TARGET test_createRegions PRE_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+	${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
+)
