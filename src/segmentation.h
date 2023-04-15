@@ -72,4 +72,7 @@ MinReg getClosestRegion(const float *imageYCbCr, const int *regionIds, const Reg
 void growRegions(int h, int w, const float *imageYCbCr, int *regionIds, Region *regions,
 				 std::vector<PxDist> & frontier);
 
+// merge
+float distanceRegion(int region1, int region2, const Region * regions);
+
 #endif // SEGMENTATION_H

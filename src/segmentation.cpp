@@ -411,3 +411,19 @@ void growRegions(int h, int w, const float *imageYCbCr, int *regionIds, Region *
 		}
 	}
 }
+
+float distanceRegion(int region1, int region2, const Region * regions)
+{
+	const ColorYCbCr & cReg1 = regions[region1].avg;
+	const ColorYCbCr & cReg2 = regions[region2].avg;
+	float denom = std::min(
+		std::sqrt(cReg1.y*cReg1.y + cReg1.cb*cReg1.cb + cReg1.cr*cReg1.cr),
+		std::sqrt(cReg2.y*cReg2.y + cReg2.cb*cReg2.cb + cReg2.cr*cReg2.cr)
+		);
+	float num = std::sqrt(
+		(cReg1.y-cReg2.y)*(cReg1.y-cReg2.y)
+		+ (cReg1.cb-cReg2.cb)*(cReg1.cb-cReg2.cb)
+		+ (cReg1.cr-cReg2.cr)*(cReg1.cr-cReg2.cr)
+		);
+	return num/denom;
+}
