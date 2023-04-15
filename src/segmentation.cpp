@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <queue>
 #include <cfloat>
+#include <set>
 
 float getPxStdDev(const float * img, int h, int w, int row, int col)
 {
@@ -274,7 +275,7 @@ void computeRegionSizeAndAvg(Region * regions, int regionCount, const int * regi
 }
 
 void computeFrontier(int h, int w, const float *imageYCbCr, const int *regionIds, const Region *regions,
-					 std::vector<PxDist> & frontier)
+					 std::multiset<PxDist, CmpPxDist> & frontier)
 {
 	for (int row=0; row < h; ++row)
 	{
@@ -285,15 +286,15 @@ void computeFrontier(int h, int w, const float *imageYCbCr, const int *regionIds
 			std::vector<Px> neighs = getNeighbours(Px{row, col}, h, w);
 			MinReg minReg = getClosestRegion(imageYCbCr, regionIds, regions, Px{row, col}, h, w);
 			if (minReg.label != -1)
-				frontier.push_back({row, col, minReg.dist});
+				frontier.emplace(row, col, minReg.dist);
 		}
 	}
-	std::sort(frontier.begin(), frontier.end(),
-			  [](const PxDist & px1, const PxDist & px2)
-			  {
-				  return px1.minDist > px2.minDist;
-			  }
-	);
+//	std::sort(frontier.begin(), frontier.end(),
+//			  [](const PxDist & px1, const PxDist & px2)
+//			  {
+//				  return px1.minDist > px2.minDist;
+//			  }
+//	);
 }
 
 MinReg getClosestRegion(const float *imageYCbCr, const int *regionIds, const Region * regions, Px px, int h, int w)
@@ -321,12 +322,12 @@ MinReg getClosestRegion(const float *imageYCbCr, const int *regionIds, const Reg
 }
 
 void growRegions(int h, int w, const float *imageYCbCr, int *regionIds, Region *regions,
-				 std::vector<PxDist> & frontier)
+				 std::multiset<PxDist, CmpPxDist> & frontier)
 {
 	while (!frontier.empty())
 	{
-		PxDist px = frontier.back();
-		frontier.pop_back();
+		PxDist px = *(--frontier.end());
+		frontier.erase(--frontier.end());
 		std::vector<Px> neighs = getNeighbours(px, h, w);
 
 		// check if all labels are the same
@@ -402,10 +403,11 @@ void growRegions(int h, int w, const float *imageYCbCr, int *regionIds, Region *
 					if (alreadyInFrontier)
 						continue;
 					PxDist newPx{neigh.row, neigh.col, minReg.dist};
-					frontier.insert(
-						std::upper_bound(frontier.begin(), frontier.end(), newPx,
-										 [](const PxDist & px1, const PxDist & px2){return px1.minDist < px2.minDist;}),
-						newPx);
+//					frontier.insert(
+//						std::upper_bound(frontier.begin(), frontier.end(), newPx,
+//										 [](const PxDist & px1, const PxDist & px2){return px1.minDist < px2.minDist;}),
+//						newPx);
+					frontier.insert(newPx);
 				}
 			}
 		}

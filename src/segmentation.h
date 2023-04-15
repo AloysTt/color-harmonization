@@ -3,6 +3,7 @@
 
 #include "ColorSpaces.h"
 #include <vector>
+#include <set>
 
 enum class OtsuCriterion
 {
@@ -63,14 +64,19 @@ inline std::vector<Px> getNeighbours(PxDist p, int h, int w)
 {
 	return getNeighbours(Px{p.row, p.col}, h, w);
 }
+struct CmpPxDist {
+	bool operator() (const PxDist & a, const PxDist & b) const {
+		return a.minDist > b.minDist;
+	}
+};
 
 int createRegionIDFromSeeds(int h, int w, const unsigned char *imageSeed, int *regionIds);
 void computeRegionSizeAndAvg(Region * regions, int regionCount, const int * regionIds, const float * imageYCbCr, int h, int w);
 void computeFrontier(int h, int w, const float *imageYCbCr, const int *regionIds, const Region *regions,
-					 std::vector<PxDist> & frontier);
+					 std::multiset<PxDist, CmpPxDist> & frontier);
 MinReg getClosestRegion(const float *imageYCbCr, const int *regionIds, const Region * regions, Px px, int h, int w);
 void growRegions(int h, int w, const float *imageYCbCr, int *regionIds, Region *regions,
-				 std::vector<PxDist> & frontier);
+				 std::multiset<PxDist, CmpPxDist> & frontier);
 
 // merge
 float distanceRegion(int region1, int region2, const Region * regions);

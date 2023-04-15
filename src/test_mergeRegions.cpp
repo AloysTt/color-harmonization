@@ -49,7 +49,7 @@ int main(int argc, char **argv)
 	computeRegionSizeAndAvg(regions, regionCount, regionIds, imageYCbCr, h, w);
 
 	// compute frontiers
-	std::vector<PxDist> frontier;
+	std::multiset<PxDist, CmpPxDist> frontier;
 	computeFrontier(h, w, imageYCbCr, regionIds, regions, frontier);
 
 	std::cout << "growing regions" << std::endl;
@@ -57,7 +57,10 @@ int main(int argc, char **argv)
 	// grow regions
 	growRegions(h, w, imageYCbCr, regionIds, regions, frontier);
 
+	// merge
 	std::cout << "merging regions" << std::endl;
+	std::cout << "\t1. by average color" << std::endl;
+	// compute neighbors of each regions
 	std::set<int> * regionNeighbours = new std::set<int>[regionCount];
 	for (int row=0; row<h; ++row)
 	{
@@ -72,7 +75,6 @@ int main(int argc, char **argv)
 			regionNeighbours[reg2].insert(reg1);
 		}
 	}
-
 	for (int row=0; row<h-1; ++row)
 	{
 		for (int col=0; col<w; ++col)
@@ -87,6 +89,7 @@ int main(int argc, char **argv)
 		}
 	}
 
+	// merging by average
 	float * closestRegions = new float[regionCount];
 	for (int i=0; i<regionCount; ++i)
 		closestRegions[i] = FLT_MAX;
@@ -101,13 +104,13 @@ int main(int argc, char **argv)
 				closestRegions[reg2] = val;
 		}
 	}
-	constexpr float THRESHOLD = 0.1;
+	constexpr float THRESHOLD_AVG = 0.05f;
 	int * regionsAssociations = new int[regionCount];
 	std::memset(regionsAssociations, -1, sizeof(int)*regionCount);
 
 	// we now have the closest region distance for each region
 	int regionMin = std::min_element(closestRegions, closestRegions+regionCount) - closestRegions;
-	while (closestRegions[regionMin] < THRESHOLD)
+	while (closestRegions[regionMin] < THRESHOLD_AVG)
 	{
 		int minNeighbor = -100000;
 		float min = FLT_MAX;
@@ -147,6 +150,7 @@ int main(int argc, char **argv)
 		// compute new distance to closest neighbour
 		closestRegions[minNeighbor] = FLT_MAX;
 		closestRegions[regionMin] = FLT_MAX;
+		regions[minNeighbor].size = INT32_MAX; // for the size merge
 		for (int neigh : regionNeighbours[regionMin])
 		{
 			float val = distanceRegion(regionMin, neigh, regions);
@@ -159,6 +163,52 @@ int main(int argc, char **argv)
 		regionMin = std::min_element(closestRegions, closestRegions+regionCount) - closestRegions;
 	}
 
+	const int THRESHOLD_SIZE = (int)(size/1000.0f);
+	std::cout << "\t1. by size" << std::endl;
+	regionMin = std::min_element(regions, regions+regionCount, [](const Region & r1, const Region & r2){return r1.size < r2.size;}) - regions;
+	while (regions[regionMin].size < THRESHOLD_SIZE)
+	{
+		int minNeighbor = -100000;
+		float min = FLT_MAX;
+		for (int neigh : regionNeighbours[regionMin])
+		{
+			float val = distanceRegion(regionMin, neigh, regions);
+			if (val < min)
+			{
+				min = val;
+				minNeighbor = neigh;
+			}
+		}
+		// new average
+		int newSize = regions[regionMin].size + regions[minNeighbor].size;
+		float newAvgY = regions[regionMin].avg.y*regions[regionMin].size + regions[minNeighbor].avg.y*regions[minNeighbor].size;
+		float newAvgCb = regions[regionMin].avg.cr*regions[regionMin].size + regions[minNeighbor].avg.cb*regions[minNeighbor].size;
+		float newAvgCr = regions[regionMin].avg.cr*regions[regionMin].size + regions[minNeighbor].avg.cr*regions[minNeighbor].size;
+		newAvgY/=newSize;
+		newAvgCb/=newSize;
+		newAvgCr/=newSize;
+		for (int reg : regionNeighbours[regionMin])
+		{
+			regionNeighbours[minNeighbor].insert(reg);
+			regionNeighbours[reg].insert(minNeighbor);
+			regionNeighbours[reg].erase(regionMin);
+		}
+		regionNeighbours[minNeighbor].erase(regionMin);
+		regionNeighbours[minNeighbor].erase(minNeighbor);
+		regionNeighbours[regionMin].clear();
+
+		regions[minNeighbor].avg = ColorYCbCr{newAvgY, newAvgCb, newAvgCr};
+		regions[minNeighbor].size = newSize;
+
+		// layer of indirection to avoid iterating over the entire image
+		regionsAssociations[regionMin] = minNeighbor;
+
+		regions[regionMin].size = INT32_MAX;
+
+		regionMin = std::min_element(regions, regions+regionCount, [](const Region & r1, const Region & r2){return r1.size < r2.size;}) - regions;
+	}
+
+
 	// update regionsIds
 	for (int i=0; i<size; ++i)
 	{
@@ -170,14 +220,24 @@ int main(int argc, char **argv)
 		regionIds[i] = current;
 	}
 
-
-
-
 	int test = *std::max_element(regionIds, regionIds+size);
 	ushort * imTest = new ushort[size];
 	for (int i=0; i<size; ++i)
 		imTest[i] = (regionIds[i]/(float)test)*65535;
 	ecrire_image_pgm_2o((baseName+"testmerge.pgm").data(), imTest, h, w);
+	delete [] imTest;
+
+	uchar * imTest2 = new uchar[size*3];
+	for (int i=0; i<size; ++i)
+	{
+		ColorRGB rgb{};
+		ycbcr_to_rgb(regions[regionIds[i]].avg, rgb);
+		imTest2[3*i] = 255.0f*rgb.r;
+		imTest2[3*i+1] = 255.0f*rgb.g;
+		imTest2[3*i+2] = 255.0f*rgb.b;
+	}
+//		imTest[i] = (regionIds[i]/(float)test)*65535;
+	ecrire_image_ppm((baseName+"testmerge_color.ppm").data(), imTest2, h, w);
 	delete [] imTest;
 
 	delete [] regionNeighbours;
