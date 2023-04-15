@@ -80,5 +80,13 @@ void growRegions(int h, int w, const float *imageYCbCr, int *regionIds, Region *
 
 // merge
 float distanceRegion(int region1, int region2, const Region * regions);
+void computeRegionNeighbors(int h, int w, const int *regionIds, std::set<int> * regionNeighbours);
+
+
+void mergeByAverage(int regionCount, Region *regions, std::set<int> *regionNeighbours, const float threshold,
+					int *regionsAssociations);
+void mergeBySize(int regionCount, Region *regions, std::set<int> *regionNeighbours, int *regionsAssociations, int regionMin,
+				 const int threshold);
+void updateRegionsID(int size, int *regionIds, const int * regionsAssociations);
 
 #endif // SEGMENTATION_H
