@@ -101,3 +101,6 @@ add_custom_command(TARGET test_createRegions PRE_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
 	${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
 )
+
+add_executable(test_imgui test_imgui.cpp)
+target_link_libraries(test_imgui PRIVATE imgui glfw glad)
