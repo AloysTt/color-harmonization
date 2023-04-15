@@ -98,7 +98,9 @@ int main(int argc, char **argv)
 //		imTest[i] = (regionIds[i]/(float)test)*65535;
 	ecrire_image_ppm((baseName+"testmerge_color.ppm").data(), imTest2, h, w);
 	delete [] imTest;
+	delete [] imTest2;
 
+	delete [] regionsAssociations;
 	delete [] regionNeighbours;
 	delete [] regions;
 	delete [] regionIds;
