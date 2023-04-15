@@ -1,3 +1,13 @@
+add_library(harmonization STATIC
+	harmonization.h harmonization.cpp
+	segmentation.h segmentation.cpp
+	KMean.h KMean.cpp
+	ColorSpaces.h ColorSpaces.cpp
+	util.h
+	image_ppm.h
+)
+target_include_directories(harmonization PUBLIC src)
+
 add_executable(main
     main.cpp
 )
@@ -113,6 +123,15 @@ add_executable(test_mergeRegions
 	image_ppm.h
 )
 add_custom_command(TARGET test_mergeRegions PRE_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+	${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
+)
+
+add_executable(test_regionsHarmonization
+	test_regionsHarmonization.cpp
+)
+target_link_libraries(test_regionsHarmonization PUBLIC harmonization)
+add_custom_command(TARGET test_regionsHarmonization PRE_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
 	${CMAKE_SOURCE_DIR}/images/ ${CMAKE_CURRENT_BINARY_DIR}
 )

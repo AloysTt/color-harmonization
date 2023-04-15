@@ -4,6 +4,7 @@
 #include <cfloat>
 #include <iostream>
 #include <cstring>
+#include "segmentation.h"
 #include "util.h"
 #include "KMean.h"
 
@@ -93,6 +94,65 @@ void shift(const Distribution & distrib, int h, int w, const unsigned char *imag
 					 + (closestDistribColor.arcWidth/2.0f)
 					   * (1.0f -
 				invmax*gaussian(absdiff, 0.0f, closestDistribColor.arcWidth/2.0f));
+		hsv.h = newHue;
+
+		// convert back to rgb and write to output image
+		ColorRGB rgbOut{};
+		hsv_to_rgb(hsv, rgbOut);
+		imageOut[3 * i] = rgbOut.r * 255.0f;
+		imageOut[3 * i + 1] = rgbOut.g  * 255.0f;
+		imageOut[3 * i + 2] = rgbOut.b * 255.0f;
+	}
+	delete [] imageSectorBorders;
+}
+
+void shiftRegions(const Distribution & distrib, int h, int w, const unsigned char *image, unsigned char *imageOut, const Region * regions, const int * imageRegions)
+{
+	int size = h*w;
+	unsigned char * imageColorRegions = new unsigned char[size*3];
+	for (int i=0; i<size; ++i)
+	{
+		ColorRGB rgb{};
+		ycbcr_to_rgb(regions[imageRegions[i]].avg, rgb);
+		imageColorRegions[3*i] = 255.0f*rgb.r;
+		imageColorRegions[3*i+1] = 255.0f*rgb.g;
+		imageColorRegions[3*i+2] = 255.0f*rgb.b;
+	}
+	unsigned char *imageSectorBorders = new unsigned char[size];
+	find_sector_borders(distrib, imageColorRegions, imageSectorBorders, h, w);
+	delete [] imageColorRegions;
+
+	for (int i=0; i < size; ++i)
+	{
+		ColorRGB rgbIn{(float) image[3 * i] / 255.0f, (float) image[3 * i + 1] / 255.0f,
+					   (float) image[3 * i + 2] / 255.0f};
+		ColorHSV hsv{};
+		rgb_to_hsv(rgbIn, hsv);
+
+		DistributionColor closestDistribColor = distrib.getColor(imageSectorBorders[i]/2);
+		closestDistribColor.hue+= distrib.getRotation();
+
+		// compute difference to find out whether we should add or subtract from the sector's hue
+		float diff = std::atan2(
+			std::sin(rad(hsv.h) - rad(closestDistribColor.hue)),
+			std::cos(rad(hsv.h) - rad(closestDistribColor.hue))
+		);
+		diff = diff*180.0f/PI;
+		float absdiff = std::abs(diff);
+		float invmax = 1.0f/gaussian(0.0f, 0.0f, closestDistribColor.arcWidth/2.0f);
+
+		// apply shift
+		float newHue;
+		if (diff < 0.0f)
+			newHue = closestDistribColor.hue
+					 - (closestDistribColor.arcWidth/2.0f)
+					   * (1.0f -
+						  invmax*gaussian(absdiff, 0.0f, closestDistribColor.arcWidth/2.0f));
+		else
+			newHue = closestDistribColor.hue
+					 + (closestDistribColor.arcWidth/2.0f)
+					   * (1.0f -
+						  invmax*gaussian(absdiff, 0.0f, closestDistribColor.arcWidth/2.0f));
 		hsv.h = newHue;
 
 		// convert back to rgb and write to output image
@@ -263,6 +323,124 @@ void KMeanShift(HarmonyType type, int h, int w, const unsigned char *image, unsi
 			distrib.addColor(std::fmod(colorsHSV[max].h-30.0f+360.0f, 360.0f), 18.0f);
 			distrib.addColor(std::fmod(colorsHSV[max].h+30.0f, 360.0f), 18.0f);
 			shift(distrib, h, w, image, imageOut);
+		}
+			break;
+		default:
+			break;
+	}
+	delete [] classes;
+	delete [] colorsHSV;
+	delete [] colors;
+}
+
+void KMeanShiftRegions(HarmonyType type, int h, int w, const unsigned char *image, unsigned char *imageOut, const Region * regions, const int * imageRegions)
+{
+	int nbColors;
+	switch (type)
+	{
+		case HarmonyType::COMPLEMENTARY:
+			nbColors = 2;
+			break;
+		case HarmonyType::TRIADIC:
+			nbColors = 3;
+			break;
+		case HarmonyType::TETRADIC_RECTANGLE:
+			nbColors = 4;
+			break;
+		case HarmonyType::TETRADIC_SQUARE:
+			nbColors = 4;
+			break;
+		case HarmonyType::SPLIT_COMPLEMENTARY:
+			nbColors = 3;
+			break;
+		case HarmonyType::ANALOGOUS:
+			nbColors = 3;
+			break;
+		default:
+			break;
+	}
+
+	int size = h*w;
+	uint * classes = new uint[size];
+	ColorRGB * colors = new ColorRGB[nbColors];
+	KMean(image, classes, colors, nbColors, h, w);
+
+	// find which color has more pixels
+	uint * pxCount = new uint[nbColors];
+	std::memset(pxCount, 0, nbColors);
+	for (int i=0; i<size; ++i)
+		++pxCount[classes[i]];
+	int max = -1;
+	int maxVal = -1;
+	for (int i=0; i<nbColors; ++i)
+	{
+		if (pxCount[i] > maxVal)
+		{
+			max = i;
+			maxVal = pxCount[i];
+		}
+	}
+	delete [] pxCount;
+
+	ColorHSV * colorsHSV = new ColorHSV[nbColors];
+	for (int i=0; i<2; ++i)
+		rgb_to_hsv(colors[i], colorsHSV[i]);
+
+	switch (type)
+	{
+		case HarmonyType::COMPLEMENTARY:
+		{
+			Distribution distrib;
+			distrib.addColor(colorsHSV[max].h, 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+180.0f, 360.0f), 18.0f);
+			shiftRegions(distrib, h, w, image, imageOut, regions, imageRegions);
+		}
+			break;
+		case HarmonyType::TRIADIC:
+		{
+			Distribution distrib;
+			distrib.addColor(colorsHSV[max].h, 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+120.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+240.0f, 360.0f), 18.0f);
+			shiftRegions(distrib, h, w, image, imageOut, regions, imageRegions);
+		}
+			break;
+		case HarmonyType::TETRADIC_RECTANGLE:
+		{
+			Distribution distrib;
+			distrib.addColor(colorsHSV[max].h, 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+60.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+180.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+240.0f, 360.0f), 18.0f);
+			shiftRegions(distrib, h, w, image, imageOut, regions, imageRegions);
+		}
+			break;
+		case HarmonyType::TETRADIC_SQUARE:
+		{
+			Distribution distrib;
+			distrib.addColor(colorsHSV[max].h, 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+90.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+180.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+270.0f, 360.0f), 18.0f);
+			shiftRegions(distrib, h, w, image, imageOut, regions, imageRegions);
+		}
+			break;
+		case HarmonyType::SPLIT_COMPLEMENTARY:
+		{
+			Distribution distrib;
+			distrib.addColor(colorsHSV[max].h, 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+150.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+210.0f, 360.0f), 18.0f);
+			shiftRegions(distrib, h, w, image, imageOut, regions, imageRegions);
+		}
+			break;
+		case HarmonyType::ANALOGOUS:
+		{
+			Distribution distrib;
+			distrib.addColor(colorsHSV[max].h, 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h-30.0f+360.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(colorsHSV[max].h+30.0f, 360.0f), 18.0f);
+			shiftRegions(distrib, h, w, image, imageOut, regions, imageRegions);
 		}
 			break;
 		default:

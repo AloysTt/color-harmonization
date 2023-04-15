@@ -48,8 +48,11 @@ private:
 };
 
 // shifting
+class Region;
 void KMeanShift(HarmonyType type, int h, int w, const unsigned char *image, unsigned char *imageOut);
+void KMeanShiftRegions(HarmonyType type, int h, int w, const unsigned char *image, unsigned char *imageOut, const Region * regions, const int * imageRegions);
 void shift(const Distribution & distrib, int h, int w, const unsigned char *image, unsigned char *imageOut);
+void shiftRegions(const Distribution & distrib, int h, int w, const unsigned char *image, unsigned char *imageOut, const Region * regions, const int * imageRegions);
 void
 find_sector_borders(const Distribution & distrib, const unsigned char *image, unsigned char *imageSectorBorders, int h,
 					int w);
