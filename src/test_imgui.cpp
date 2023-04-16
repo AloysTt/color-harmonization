@@ -11,6 +11,8 @@
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
 #include <stdio.h>
+#include <iostream>
+#include "image_ppm.h"
 #define GL_SILENCE_DEPRECATION
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <GLES2/gl2.h>
@@ -34,7 +36,7 @@ static void glfw_error_callback(int error, const char* description)
 }
 
 // Main code
-int main(int, char**)
+int main(int argc, char** argv)
 {
 	glfwSetErrorCallback(glfw_error_callback);
 	if (!glfwInit())
@@ -64,7 +66,7 @@ int main(int, char**)
 #endif
 
 	// Create window with graphics context
-	GLFWwindow* window = glfwCreateWindow(1280, 720, "Dear ImGui GLFW+OpenGL3 example", nullptr, nullptr);
+	GLFWwindow* window = glfwCreateWindow(1280, 720, "Harmonisation", nullptr, nullptr);
 	if (window == nullptr)
 		return 1;
 	glfwMakeContextCurrent(window);
@@ -106,9 +108,24 @@ int main(int, char**)
 	//IM_ASSERT(font != nullptr);
 
 	// Our state
-	bool show_demo_window = true;
+	bool show_demo_window = false;
 	bool show_another_window = false;
 	ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
+
+	//image
+	char text[256]= "";
+	std::string imageInName;
+	std::string imageOutName;
+	std::string baseName;
+	int w, h, size, size3;
+	w = 512;
+	h = 512;
+	unsigned char* imageIn;
+	unsigned char* imageOut;
+	bool auto_harmo = false;
+	const char* items[] = {"Choix 1", "Choix 2", "Choix X"};
+	static int selected_item = 0;
+
 
 	// Main loop
 #ifdef __EMSCRIPTEN__
@@ -126,6 +143,7 @@ int main(int, char**)
 		// - When io.WantCaptureKeyboard is true, do not dispatch keyboard input data to your main application, or clear/overwrite your copy of the keyboard data.
 		// Generally you may always pass all inputs to dear imgui, and hide them from your application based on those two flags.
 		glfwPollEvents();
+		ImVec2 mainWindowSize = ImGui::GetIO().DisplaySize;
 
 		// Start the Dear ImGui frame
 		ImGui_ImplOpenGL3_NewFrame();
@@ -140,22 +158,60 @@ int main(int, char**)
 		{
 			static float f = 0.0f;
 			static int counter = 0;
+			ImGui::SetNextWindowSize(mainWindowSize);
+			ImGui::SetNextWindowPos(ImVec2(0,0));
+			ImGui::Begin("Hamonisation d'images", nullptr, ImGuiWindowFlags_NoResize);                          // Create a window called "Hello, world!" and append into it.
 
-			ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
+			//ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
+			//ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
+			//ImGui::Checkbox("Another Window", &show_another_window);
 
-			ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-			ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-			ImGui::Checkbox("Another Window", &show_another_window);
-
-			ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-			ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
+			//ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+			//ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
+/*
 			if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
 				counter++;
+			ImGui::SameLine();*/
+			//ImGui::Text("counter = %d", counter);
+			ImGui::InputTextWithHint("Acces","Chemin de l'image", text, 256);
 			ImGui::SameLine();
-			ImGui::Text("counter = %d", counter);
+			if (ImGui::Button("Charger l'image")){
+				imageInName = {text};
+				baseName = {imageInName.substr(0, imageInName.size()-4)};
+				lire_nb_lignes_colonnes_image_ppm(imageInName.data(), &h, &w);
+				size = h*w;
+				size3 = size * 3;
+				imageIn = new unsigned char[size3];
+				lire_image_ppm(imageInName.data(), imageIn, size);
+			}
+			ImGui::Image((void*)imageIn, ImVec2(w, h));
+			ImGui::SameLine();
+			ImGui::SetCursorPosY(300);
+			ImGui::Text("Transformation ====>");
+			ImGui::SameLine();
+			ImGui::Image((void*)imageOut, ImVec2(w, h));
+			ImGui::ColorEdit3("clear color", (float*)&clear_color);
+			ImGui::Text("Choix du template");
+			ImGui::SetNextItemWidth(200);
+			ImGui::ListBox("##", &selected_item, items, IM_ARRAYSIZE(items));
+			ImGui::SameLine();
+			ImGui::Checkbox("Harmonisation automatique", &auto_harmo);
 
-			ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+			if (ImGui::Button("Modifier l'image")){
+				imageOut = new unsigned char[size3];
+				imageOutName = baseName+"_shift.ppm";
+				/*
+				if(selected_item==0) ...
+				else if(selected_item==1) ...
+				...
+				HARMONISATION(distrib, h, w, image, imageOut);
+				*/
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Enregistrer l'image de sortie")){
+				ecrire_image_ppm(imageOutName.data(), imageOut, h, w);
+			}
+			//ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
 			ImGui::End();
 		}
 
@@ -174,7 +230,8 @@ int main(int, char**)
 		int display_w, display_h;
 		glfwGetFramebufferSize(window, &display_w, &display_h);
 		glViewport(0, 0, display_w, display_h);
-		glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
+		//glClearColor(clear_color.x * clear_color.w, clear_color.y * clear_color.w, clear_color.z * clear_color.w, clear_color.w);
+		glClearColor(0.45f, 0.55f, 0.60f, 1.00f);
 		glClear(GL_COLOR_BUFFER_BIT);
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
