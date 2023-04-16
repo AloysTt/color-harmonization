@@ -137,4 +137,4 @@ add_custom_command(TARGET test_regionsHarmonization PRE_BUILD
 )
 
 add_executable(test_imgui test_imgui.cpp)
-target_link_libraries(test_imgui PRIVATE imgui glfw glad)
+target_link_libraries(test_imgui PRIVATE imgui imguifiledialog glfw glad harmonization)

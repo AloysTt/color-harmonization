@@ -50,7 +50,9 @@ private:
 // shifting
 class Region;
 void KMeanShift(HarmonyType type, int h, int w, const unsigned char *image, unsigned char *imageOut);
+void shiftColor(float mainHue, HarmonyType type, int h, int w, const unsigned char *image, unsigned char *imageOut);
 void KMeanShiftRegions(HarmonyType type, int h, int w, const unsigned char *image, unsigned char *imageOut, const Region * regions, const int * imageRegions);
+void shiftColorRegions(float mainHue, HarmonyType type, int h, int w, const unsigned char *image, unsigned char *imageOut, const Region * regions, const int * imageRegions);
 void shift(const Distribution & distrib, int h, int w, const unsigned char *image, unsigned char *imageOut);
 void shiftRegions(const Distribution & distrib, int h, int w, const unsigned char *image, unsigned char *imageOut, const Region * regions, const int * imageRegions);
 void

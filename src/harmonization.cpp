@@ -333,6 +333,134 @@ void KMeanShift(HarmonyType type, int h, int w, const unsigned char *image, unsi
 	delete [] colors;
 }
 
+void shiftColor(float mainHue, HarmonyType type, int h, int w, const unsigned char *image, unsigned char *imageOut)
+{
+	switch (type)
+	{
+		case HarmonyType::COMPLEMENTARY:
+		{
+			Distribution distrib;
+			distrib.addColor(std::fmod(mainHue, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+180.0f, 360.0f), 18.0f);
+			shift(distrib, h, w, image, imageOut);
+		}
+			break;
+		case HarmonyType::TRIADIC:
+		{
+			Distribution distrib;
+			distrib.addColor(std::fmod(mainHue, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+120.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+240.0f, 360.0f), 18.0f);
+			shift(distrib, h, w, image, imageOut);
+		}
+			break;
+		case HarmonyType::TETRADIC_RECTANGLE:
+		{
+			Distribution distrib;
+			distrib.addColor(std::fmod(mainHue, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+60.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+180.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+240.0f, 360.0f), 18.0f);
+			shift(distrib, h, w, image, imageOut);
+		}
+			break;
+		case HarmonyType::TETRADIC_SQUARE:
+		{
+			Distribution distrib;
+			distrib.addColor(std::fmod(mainHue, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+90.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+180.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+270.0f, 360.0f), 18.0f);
+			shift(distrib, h, w, image, imageOut);
+		}
+			break;
+		case HarmonyType::SPLIT_COMPLEMENTARY:
+		{
+			Distribution distrib;
+			distrib.addColor(std::fmod(mainHue, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+150.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+210.0f, 360.0f), 18.0f);
+			shift(distrib, h, w, image, imageOut);
+		}
+			break;
+		case HarmonyType::ANALOGOUS:
+		{
+			Distribution distrib;
+			distrib.addColor(std::fmod(mainHue, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue-30.0f+360.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+30.0f, 360.0f), 18.0f);
+			shift(distrib, h, w, image, imageOut);
+		}
+			break;
+		default:
+			break;
+	}
+}
+
+void shiftColorRegions(float mainHue, HarmonyType type, int h, int w, const unsigned char *image, unsigned char *imageOut, const Region * regions, const int * imageRegions)
+{
+	switch (type)
+	{
+		case HarmonyType::COMPLEMENTARY:
+		{
+			Distribution distrib;
+			distrib.addColor(std::fmod(mainHue, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+180.0f, 360.0f), 18.0f);
+			shiftRegions(distrib, h, w, image, imageOut, regions, imageRegions);
+		}
+			break;
+		case HarmonyType::TRIADIC:
+		{
+			Distribution distrib;
+			distrib.addColor(std::fmod(mainHue, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+120.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+240.0f, 360.0f), 18.0f);
+			shiftRegions(distrib, h, w, image, imageOut, regions, imageRegions);
+		}
+			break;
+		case HarmonyType::TETRADIC_RECTANGLE:
+		{
+			Distribution distrib;
+			distrib.addColor(std::fmod(mainHue, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+60.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+180.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+240.0f, 360.0f), 18.0f);
+			shiftRegions(distrib, h, w, image, imageOut, regions, imageRegions);
+		}
+			break;
+		case HarmonyType::TETRADIC_SQUARE:
+		{
+			Distribution distrib;
+			distrib.addColor(std::fmod(mainHue, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+90.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+180.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+270.0f, 360.0f), 18.0f);
+			shiftRegions(distrib, h, w, image, imageOut, regions, imageRegions);
+		}
+			break;
+		case HarmonyType::SPLIT_COMPLEMENTARY:
+		{
+			Distribution distrib;
+			distrib.addColor(std::fmod(mainHue, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+150.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+210.0f, 360.0f), 18.0f);
+			shiftRegions(distrib, h, w, image, imageOut, regions, imageRegions);
+		}
+			break;
+		case HarmonyType::ANALOGOUS:
+		{
+			Distribution distrib;
+			distrib.addColor(std::fmod(mainHue, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue-30.0f+360.0f, 360.0f), 18.0f);
+			distrib.addColor(std::fmod(mainHue+30.0f, 360.0f), 18.0f);
+			shiftRegions(distrib, h, w, image, imageOut, regions, imageRegions);
+		}
+			break;
+		default:
+			break;
+	}
+}
+
 void KMeanShiftRegions(HarmonyType type, int h, int w, const unsigned char *image, unsigned char *imageOut, const Region * regions, const int * imageRegions)
 {
 	int nbColors;

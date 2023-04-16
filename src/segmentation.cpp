@@ -356,6 +356,7 @@ void growRegions(int h, int w, const float *imageYCbCr, int *regionIds, Region *
 			for (int i=0; i<neighs.size(); ++i)
 			{
 				int curLabel = regionIds[neighs[i].row*w+neighs[i].col];
+				if (curLabel == -1) continue;
 				if (std::find(labels.begin(), labels.end(), curLabel) == labels.end())
 				{
 					labels.push_back(curLabel);
@@ -533,6 +534,7 @@ void mergeByAverage(int regionCount, Region *regions, std::set<int> *regionNeigh
 
 		regionMin = std::min_element(closestRegions, closestRegions+regionCount) - closestRegions;
 	}
+	delete [] closestRegions;
 }
 
 

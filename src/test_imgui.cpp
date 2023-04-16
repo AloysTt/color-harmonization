@@ -12,27 +12,118 @@
 #include "imgui_impl_opengl3.h"
 #include <stdio.h>
 #include <iostream>
+#include <cstring>
 #include "image_ppm.h"
-#define GL_SILENCE_DEPRECATION
-#if defined(IMGUI_IMPL_OPENGL_ES2)
-#include <GLES2/gl2.h>
-#endif
+#include "ImGuiFileDialog.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb/stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb/stb_image_write.h"
+#include "harmonization.h"
+#include "ColorSpaces.h"
+#include "segmentation.h"
 
-// [Win32] Our example includes a copy of glfw3.lib pre-compiled with VS2010 to maximize ease of testing and compatibility with old VS compilers.
-// To link with VS2010-era libraries, VS2015+ requires linking with legacy_stdio_definitions.lib, which we do using this pragma.
-// Your own project should not be affected, as you are likely to link with a newer binary of GLFW that is adequate for your version of Visual Studio.
-#if defined(_MSC_VER) && (_MSC_VER >= 1900) && !defined(IMGUI_DISABLE_WIN32_FUNCTIONS)
-#pragma comment(lib, "legacy_stdio_definitions")
-#endif
-
-// This example can also compile and run with Emscripten! See 'Makefile.emscripten' for details.
-#ifdef __EMSCRIPTEN__
-#include "../libs/emscripten/emscripten_mainloop_stub.h"
-#endif
+typedef unsigned char uchar;
 
 static void glfw_error_callback(int error, const char* description)
 {
 	fprintf(stderr, "GLFW Error %d: %s\n", error, description);
+}
+
+HarmonyType textToHarmonyType(const std::string & type)
+{
+	if (type == "Complémentaire")
+		return HarmonyType::COMPLEMENTARY;
+	if (type == "Triadique")
+		return HarmonyType::TRIADIC;
+	if (type == "Tétradique carré")
+		return HarmonyType::TETRADIC_SQUARE;
+	if (type == "Tétradique rectangle")
+		return HarmonyType::TETRADIC_RECTANGLE;
+	if (type == "Complémentaire-split")
+		return HarmonyType::SPLIT_COMPLEMENTARY;
+	if (type == "Analogue")
+		return HarmonyType::ANALOGOUS;
+	return HarmonyType::COMPLEMENTARY;
+}
+
+void updatePreview(const ImVec4 & clear_color, int w, int h, const unsigned char *imageIn, unsigned char *imageOut,
+				   const char *const *items, int selectedHarmony, GLuint textureID, bool Kmean)
+{
+	if (Kmean)
+	{
+		KMeanShift(textToHarmonyType({items[selectedHarmony]}), h, w, imageIn, imageOut);
+	}
+	else
+	{
+		ColorHSV hsv{};
+		rgb_to_hsv({clear_color.x, clear_color.y, clear_color.z}, hsv);
+		shiftColor(hsv.h, textToHarmonyType({items[selectedHarmony]}), h, w, imageIn, imageOut);
+	}
+	glBindTexture(GL_TEXTURE_2D, textureID);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, imageOut);
+}
+
+int computeRegions(int h, int w, const unsigned char * image, int * regionIds, Region ** regions, ImGuiTextBuffer & buf, float thresholdAvg, float thresholdSize)
+{
+	int size = h*w;
+	int size3 = 3*size;
+	// convert to ycbcr float
+	float * imageYCbCr = new float[size3];
+	rgb_to_ycbcr(image, imageYCbCr, h, w);
+
+	// compute seeds
+	buf.append("computing seeds\n");
+	uchar * imageSeed = new uchar[size];
+	std::memset(imageSeed, 0u, sizeof(uchar)*size);
+	computeSeeds(imageYCbCr, imageSeed, h, w, 100, 0.02f);
+
+	// create regions based solely on seedsseeds
+	buf.append("creating regions\n");
+	int regionCount = createRegionIDFromSeeds(h, w, imageSeed, regionIds);
+
+	// compute region size and average
+	buf.append("computing region size and average\n");
+	*regions = new Region[regionCount];
+	computeRegionSizeAndAvg(*regions, regionCount, regionIds, imageYCbCr, h, w);
+
+	// compute frontiers
+	buf.append("computing frontier\n");
+	std::multiset<PxDist, CmpPxDist> frontier;
+	computeFrontier(h, w, imageYCbCr, regionIds, *regions, frontier);
+
+	// grow regions
+	buf.append("growing regions\n");
+	growRegions(h, w, imageYCbCr, regionIds, *regions, frontier);
+
+	// merge
+	buf.append("merging regions\n");
+	// compute neighbors of each regions
+	std::set<int> * regionNeighbours = new std::set<int>[regionCount];
+	computeRegionNeighbors(h, w, regionIds, regionNeighbours);
+	int * regionsAssociations = new int[regionCount];
+	std::memset(regionsAssociations, -1, sizeof(int)*regionCount);
+
+	// merging by average
+	buf.append("\t1. by average color\n");
+	constexpr float THRESHOLD_AVG = 0.05f;
+	int regionMin;
+	mergeByAverage(regionCount, *regions, regionNeighbours, thresholdAvg, regionsAssociations);
+
+	buf.append("\t2. by size\n");
+	const int THRESHOLD_SIZE = (int)(size/1000.0f);
+	mergeBySize(regionCount, *regions, regionNeighbours, regionsAssociations, regionMin, thresholdSize);
+
+	// update regionsIds
+	buf.append("updating region IDs\n");
+	updateRegionsID(size, regionIds, regionsAssociations);
+
+	delete [] imageYCbCr;
+	delete [] imageSeed;
+	delete [] regionNeighbours;
+	delete [] regionsAssociations;
+
+	return regionCount;
 }
 
 // Main code
@@ -120,22 +211,48 @@ int main(int argc, char** argv)
 	int w, h, size, size3;
 	w = 512;
 	h = 512;
-	unsigned char* imageIn;
-	unsigned char* imageOut;
+	unsigned char* imageIn = nullptr;
+	int * regionIDs = nullptr;
+	Region * regions = nullptr;
+	unsigned char* imageOut = nullptr;
 	bool auto_harmo = false;
-	const char* items[] = {"Choix 1", "Choix 2", "Choix X"};
+	const char* items[] = {"Complémentaire", "Triadique", "Tétradique carré", "Tétradique rectangle", "Complémentaire-split", "Analogue"};
 	static int selected_item = 0;
+	GLuint textureLeft = -1;
+	GLuint textureRight = -1;
+	bool regionsDone = false;
+	int regionsCount = 0;
+	float thresholdAvg = 0.1f;
+	int thresholdSize = 500;
+	ImVec2 imageDisplaySize(500, 500);
+	ImGuiTextBuffer log;
+
+
+	// create texture
+	glGenTextures(1, &textureLeft);
+	glBindTexture(GL_TEXTURE_2D, textureLeft);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+	glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+	glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+	glGenTextures(1, &textureRight);
+	glBindTexture(GL_TEXTURE_2D, textureRight);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+	glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
+	glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
 
 
 	// Main loop
-#ifdef __EMSCRIPTEN__
-	// For an Emscripten build we are disabling file-system access, so let's not attempt to do a fopen() of the imgui.ini file.
-    // You may manually call LoadIniSettingsFromMemory() to load settings from your own storage.
-    io.IniFilename = nullptr;
-    EMSCRIPTEN_MAINLOOP_BEGIN
-#else
 	while (!glfwWindowShouldClose(window))
-#endif
 	{
 		// Poll and handle events (inputs, window resize, etc.)
 		// You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
@@ -150,78 +267,164 @@ int main(int argc, char** argv)
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
 
-		// 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-		if (show_demo_window)
-			ImGui::ShowDemoWindow(&show_demo_window);
-
-		// 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
 		{
-			static float f = 0.0f;
-			static int counter = 0;
 			ImGui::SetNextWindowSize(mainWindowSize);
 			ImGui::SetNextWindowPos(ImVec2(0,0));
-			ImGui::Begin("Hamonisation d'images", nullptr, ImGuiWindowFlags_NoResize);                          // Create a window called "Hello, world!" and append into it.
+			ImGui::Begin("Harmonisation d'images", nullptr, ImGuiWindowFlags_NoResize);                          // Create a window called "Hello, world!" and append into it.
 
-			//ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-			//ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-			//ImGui::Checkbox("Another Window", &show_another_window);
-
-			//ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-			//ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-/*
-			if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-				counter++;
-			ImGui::SameLine();*/
-			//ImGui::Text("counter = %d", counter);
-			ImGui::InputTextWithHint("Acces","Chemin de l'image", text, 256);
-			ImGui::SameLine();
-			if (ImGui::Button("Charger l'image")){
-				imageInName = {text};
-				baseName = {imageInName.substr(0, imageInName.size()-4)};
-				lire_nb_lignes_colonnes_image_ppm(imageInName.data(), &h, &w);
-				size = h*w;
-				size3 = size * 3;
-				imageIn = new unsigned char[size3];
-				lire_image_ppm(imageInName.data(), imageIn, size);
+			if (ImGui::Button("Ouvrir..."))
+			{
+				ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choisir une image", ".ppm", ".", 1, nullptr, ImGuiFileDialogFlags_Modal);
 			}
-			ImGui::Image((void*)imageIn, ImVec2(w, h));
+			if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
+			{
+				// action if OK
+				if (ImGuiFileDialog::Instance()->IsOk())
+				{
+					std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+					std::string filePath = ImGuiFileDialog::Instance()->GetCurrentPath();
+					imageInName = filePathName.substr(filePath.size()+1);
+//
+//					baseName = {imageInName.substr(0, imageInName.size()-4)};
+//					lire_nb_lignes_colonnes_image_ppm(filePathName.data(), &h, &w);
+//					size = h*w;
+//					size3 = size * 3;
+//					lire_image_ppm(filePathName.data(), imageIn, size);
+
+					if (imageIn != nullptr)
+						free(imageIn);
+					imageIn = stbi_load(filePathName.c_str(), &w, &h, nullptr, 3);
+					size = h*w;
+					size3 = h*w*3;
+					glBindTexture(GL_TEXTURE_2D, textureLeft);
+					glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, imageIn);
+
+					imageDisplaySize = ImVec2(500, 500.0f*((float)h/(float)w));
+
+					if (imageOut != nullptr)
+						delete [] imageOut;
+					imageOut = new unsigned char[size3];
+					updatePreview(clear_color, w, h, imageIn, imageOut, items, selected_item, textureRight, auto_harmo);
+
+					if (regionIDs != nullptr)
+					{
+						delete [] regionIDs;
+						regions = nullptr;
+					}
+					if (regions != nullptr)
+					{
+						delete [] regions;
+						regions = nullptr;
+					}
+					regionsCount = 0;
+					regionsDone = false;
+				}
+
+				// close
+				ImGuiFileDialog::Instance()->Close();
+			}
+//			if (ImGui::Button("Charger l'image")){
+//				imageInName = {text};
+//				baseName = {imageInName.substr(0, imageInName.size()-4)};
+//				lire_nb_lignes_colonnes_image_ppm(imageInName.data(), &h, &w);
+//				size = h*w;
+//				size3 = size * 3;
+//				imageIn = new unsigned char[size3];
+//				lire_image_ppm(imageInName.data(), imageIn, size);
+//			}
+			ImGui::Image((void*)textureLeft, imageDisplaySize);
 			ImGui::SameLine();
 			ImGui::SetCursorPosY(300);
-			ImGui::Text("Transformation ====>");
+			ImGui::Text("=>");
 			ImGui::SameLine();
-			ImGui::Image((void*)imageOut, ImVec2(w, h));
-			ImGui::ColorEdit3("clear color", (float*)&clear_color);
+			ImGui::Image((void*)textureRight, imageDisplaySize);
+			if (ImGui::ColorEdit3("clear color", (float*)&clear_color))
+			{
+				if (!auto_harmo)
+					updatePreview(clear_color, w, h, imageIn, imageOut, items, selected_item, textureRight, auto_harmo);
+			}
 			ImGui::Text("Choix du template");
 			ImGui::SetNextItemWidth(200);
-			ImGui::ListBox("##", &selected_item, items, IM_ARRAYSIZE(items));
+			if (ImGui::ListBox("##", &selected_item, items, IM_ARRAYSIZE(items)))
+			{
+				if (!auto_harmo)
+					updatePreview(clear_color, w, h, imageIn, imageOut, items, selected_item, textureRight, auto_harmo);
+			}
 			ImGui::SameLine();
-			ImGui::Checkbox("Harmonisation automatique", &auto_harmo);
+			if (ImGui::Checkbox("Harmonisation automatique", &auto_harmo))
+			{
+				updatePreview(clear_color, w, h, imageIn, imageOut, items, selected_item, textureRight, auto_harmo);
+			}
 
-			if (ImGui::Button("Modifier l'image")){
-				imageOut = new unsigned char[size3];
-				imageOutName = baseName+"_shift.ppm";
-				/*
-				if(selected_item==0) ...
-				else if(selected_item==1) ...
-				...
-				HARMONISATION(distrib, h, w, image, imageOut);
-				*/
+			if (ImGui::Button("Calculer l'image finale"))
+			{
+				if (!regionsDone)
+				{
+					regionIDs = new int[size];
+					regionsCount = computeRegions(h, w, imageIn, regionIDs, &regions, log, thresholdAvg, size*1.0f/(float)thresholdSize);
+					regionsDone = true;
+				}
+				if (auto_harmo)
+				{
+					KMeanShiftRegions(textToHarmonyType({items[selected_item]}), h, w, imageIn, imageOut, regions, regionIDs);
+				}
+				else
+				{
+					ColorHSV hsv{};
+					rgb_to_hsv({clear_color.x, clear_color.y, clear_color.z}, hsv);
+					shiftColorRegions(hsv.h, textToHarmonyType({items[selected_item]}), h, w, imageIn, imageOut, regions, regionIDs);
+				}
+				glBindTexture(GL_TEXTURE_2D, textureRight);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, imageOut);
 			}
 			ImGui::SameLine();
-			if (ImGui::Button("Enregistrer l'image de sortie")){
-				ecrire_image_ppm(imageOutName.data(), imageOut, h, w);
+			if (ImGui::Button("Enregistrer sous..."))
+			{
+				ImGuiFileDialog::Instance()->OpenDialog("SaveFileDlgKey", "Choisir un nom", ".png", ".", 1, nullptr, ImGuiFileDialogFlags_Modal);
+//				ecrire_image_ppm(imageOutName.data(), imageOut, h, w);
 			}
+
+			if (ImGuiFileDialog::Instance()->Display("SaveFileDlgKey"))
+			{
+				// action if OK
+				if (ImGuiFileDialog::Instance()->IsOk())
+				{
+					std::string res = ImGuiFileDialog::Instance()->GetFilePathName();
+
+					stbi_write_png(res.c_str(), w, h, 3, (void*)imageOut, 0);
+				}
+
+				// close
+				ImGuiFileDialog::Instance()->Close();
+			}
+			bool delRegions = false;
+			if (ImGui::SliderFloat("Différence min. entre les régions", &thresholdAvg, 0.01f, 0.2f))
+				delRegions = true;
+			if (ImGui::SliderInt("Taille min. des régions", &thresholdSize, 2000, 50, "1/%d"))
+				delRegions = true;
+			if (delRegions)
+			{
+				if (regionIDs != nullptr)
+				{
+					delete [] regionIDs;
+					regionIDs = nullptr;
+				}
+				if (regions != nullptr)
+				{
+					delete [] regions;
+					regions = nullptr;
+				}
+				regionsCount = 0;
+				regionsDone = false;
+			}
+
+
+			ImGui::BeginChild("##");
+			{
+				ImGui::TextUnformatted(log.begin());
+			}
+			ImGui::EndChild();
 			//ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-			ImGui::End();
-		}
-
-		// 3. Show another simple window.
-		if (show_another_window)
-		{
-			ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-			ImGui::Text("Hello from another window!");
-			if (ImGui::Button("Close Me"))
-				show_another_window = false;
 			ImGui::End();
 		}
 
@@ -245,6 +448,11 @@ int main(int argc, char** argv)
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
+
+	free(imageIn);
+	delete [] imageOut;
+	delete [] regionIDs;
+	delete [] regions;
 
 	glfwDestroyWindow(window);
 	glfwTerminate();
