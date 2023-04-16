@@ -338,7 +338,7 @@ int main(int argc, char** argv)
 			ImGui::Text("=>");
 			ImGui::SameLine();
 			ImGui::Image((void*)textureRight, imageDisplaySize);
-			if (ImGui::ColorEdit3("clear color", (float*)&clear_color))
+			if (ImGui::ColorEdit3("Couleur", (float*)&clear_color))
 			{
 				if (!auto_harmo)
 					updatePreview(clear_color, w, h, imageIn, imageOut, items, selected_item, textureRight, auto_harmo);
