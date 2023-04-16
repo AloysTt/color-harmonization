@@ -456,8 +456,7 @@ int main(int argc, char** argv)
 			ImGui::SetNextItemWidth(200);
 			if (ImGui::ListBox("##", &selected_item, items, IM_ARRAYSIZE(items)))
 			{
-				if (!auto_harmo)
-					updatePreview(clear_color, w, h, imageIn, imageOut, items, selected_item, textureRight, auto_harmo);
+				updatePreview(clear_color, w, h, imageIn, imageOut, items, selected_item, textureRight, auto_harmo);
 			}
 			ImGui::SameLine();
 			if (ImGui::Checkbox("Harmonisation automatique", &auto_harmo))
