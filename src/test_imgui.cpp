@@ -25,6 +25,13 @@
 
 typedef unsigned char uchar;
 
+bool startedThread = false;
+std::atomic<bool> threadDone = false;
+std::jthread * renderThread = nullptr;
+std::atomic<bool> regionsDone = false;
+
+ImGuiTextBuffer buf;
+
 static void glfw_error_callback(int error, const char* description)
 {
 	fprintf(stderr, "GLFW Error %d: %s\n", error, description);
@@ -47,83 +54,143 @@ HarmonyType textToHarmonyType(const std::string & type)
 	return HarmonyType::COMPLEMENTARY;
 }
 
-void updatePreview(const ImVec4 & clear_color, int w, int h, const unsigned char *imageIn, unsigned char *imageOut,
-				   const char *const *items, int selectedHarmony, GLuint textureID, bool Kmean)
+//void stopThread()
+//{
+//	if (startedThread && renderThread->joinable())
+//	{
+//		renderThread->request_stop();
+//		renderThread->join();
+//		delete renderThread;
+//		startedThread = false;
+//	}
+//}
+
+
+void updatePreviewThreaded(const ImVec4 & clear_color, int w, int h, const unsigned char *imageIn, unsigned char *imageOut,
+				   const char *const *items, int selectedHarmony, bool Kmean)
 {
-	if (Kmean)
-	{
-		KMeanShift(textToHarmonyType({items[selectedHarmony]}), h, w, imageIn, imageOut);
-	}
-	else
-	{
-		ColorHSV hsv{};
-		rgb_to_hsv({clear_color.x, clear_color.y, clear_color.z}, hsv);
-		shiftColor(hsv.h, textToHarmonyType({items[selectedHarmony]}), h, w, imageIn, imageOut);
-	}
-	glBindTexture(GL_TEXTURE_2D, textureID);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, imageOut);
+	HarmonyType type = textToHarmonyType({items[selectedHarmony]});
+	ColorHSV hsv{};
+	rgb_to_hsv({clear_color.x, clear_color.y, clear_color.z}, hsv);
+	float hue = hsv.h;
+
+	startedThread = true;
+	threadDone = false;
+	renderThread = new std::jthread([Kmean, type, h, w, imageIn, imageOut, hue]()
+		{
+			if (Kmean)
+			{
+				buf.append("Shifting with k-mean.\n");
+				KMeanShift(type, h, w, imageIn, imageOut);
+			}
+			else
+			{
+				buf.append("Shifting with given color.\n");
+				shiftColor(hue, type, h, w, imageIn, imageOut);
+			}
+			buf.append("Done.\n");
+			threadDone = true;
+		}
+	);
 }
 
-int computeRegions(int h, int w, const unsigned char * image, int * regionIds, Region ** regions, ImGuiTextBuffer & buf, float thresholdAvg, float thresholdSize)
+
+void updatePreview(const ImVec4 & clear_color, int w, int h, const unsigned char *imageIn, unsigned char *imageOut,
+						   const char *const *items, int selectedHarmony, GLuint textureID, bool Kmean)
 {
-	int size = h*w;
-	int size3 = 3*size;
-	// convert to ycbcr float
-	float * imageYCbCr = new float[size3];
-	rgb_to_ycbcr(image, imageYCbCr, h, w);
+	if (!startedThread)
+	{
+		updatePreviewThreaded(clear_color, w, h, imageIn, imageOut, items, selectedHarmony, Kmean);
+	}
+	else if (!threadDone)
+	{
+		delete renderThread;
+		updatePreviewThreaded(clear_color, w, h, imageIn, imageOut, items, selectedHarmony, Kmean);
+	}
+}
 
-	// compute seeds
-	buf.append("computing seeds\n");
-	uchar * imageSeed = new uchar[size];
-	std::memset(imageSeed, 0u, sizeof(uchar)*size);
-	computeSeeds(imageYCbCr, imageSeed, h, w, 100, 0.02f);
+void computeRegionsThreaded(int h, int w, const unsigned char * image, int * regionIds, Region ** regions, float thresholdAvg, float thresholdSize)
+{
+	startedThread = true;
+	threadDone = false;
+	renderThread = new std::jthread([h, w, image, regions, regionIds, thresholdSize, thresholdAvg]()
+		{
+			buf.clear();
+			int size = h*w;
+			int size3 = 3*size;
+			// convert to ycbcr float
+			float * imageYCbCr = new float[size3];
+			rgb_to_ycbcr(image, imageYCbCr, h, w);
 
-	// create regions based solely on seedsseeds
-	buf.append("creating regions\n");
-	int regionCount = createRegionIDFromSeeds(h, w, imageSeed, regionIds);
+			// compute seeds
+			buf.append("computing seeds\n");
+			uchar * imageSeed = new uchar[size];
+			std::memset(imageSeed, 0u, sizeof(uchar)*size);
+			computeSeeds(imageYCbCr, imageSeed, h, w, 100, 0.02f);
 
-	// compute region size and average
-	buf.append("computing region size and average\n");
-	*regions = new Region[regionCount];
-	computeRegionSizeAndAvg(*regions, regionCount, regionIds, imageYCbCr, h, w);
+			// create regions based solely on seeds
+			buf.append("creating regions\n");
+			int regionCount = createRegionIDFromSeeds(h, w, imageSeed, regionIds);
 
-	// compute frontiers
-	buf.append("computing frontier\n");
-	std::multiset<PxDist, CmpPxDist> frontier;
-	computeFrontier(h, w, imageYCbCr, regionIds, *regions, frontier);
+			// compute region size and average
+			buf.append("computing region size and average\n");
+			*regions = new Region[regionCount];
+			computeRegionSizeAndAvg(*regions, regionCount, regionIds, imageYCbCr, h, w);
 
-	// grow regions
-	buf.append("growing regions\n");
-	growRegions(h, w, imageYCbCr, regionIds, *regions, frontier);
+			// compute frontiers
+			buf.append("computing frontier\n");
+			std::multiset<PxDist, CmpPxDist> frontier;
+			computeFrontier(h, w, imageYCbCr, regionIds, *regions, frontier);
 
-	// merge
-	buf.append("merging regions\n");
-	// compute neighbors of each regions
-	std::set<int> * regionNeighbours = new std::set<int>[regionCount];
-	computeRegionNeighbors(h, w, regionIds, regionNeighbours);
-	int * regionsAssociations = new int[regionCount];
-	std::memset(regionsAssociations, -1, sizeof(int)*regionCount);
+			// grow regions
+			buf.append("growing regions\n");
+			growRegions(h, w, imageYCbCr, regionIds, *regions, frontier);
 
-	// merging by average
-	buf.append("\t1. by average color\n");
-	constexpr float THRESHOLD_AVG = 0.05f;
-	int regionMin;
-	mergeByAverage(regionCount, *regions, regionNeighbours, thresholdAvg, regionsAssociations);
+			// merge
+			buf.append("merging regions\n");
+			// compute neighbors of each regions
+			std::set<int> * regionNeighbours = new std::set<int>[regionCount];
+			computeRegionNeighbors(h, w, regionIds, regionNeighbours);
+			int * regionsAssociations = new int[regionCount];
+			std::memset(regionsAssociations, -1, sizeof(int)*regionCount);
 
-	buf.append("\t2. by size\n");
-	const int THRESHOLD_SIZE = (int)(size/1000.0f);
-	mergeBySize(regionCount, *regions, regionNeighbours, regionsAssociations, regionMin, thresholdSize);
+			// merging by average
+			buf.append("\t1. by average color\n");
+			constexpr float THRESHOLD_AVG = 0.05f;
+			int regionMin;
+			mergeByAverage(regionCount, *regions, regionNeighbours, thresholdAvg, regionsAssociations);
 
-	// update regionsIds
-	buf.append("updating region IDs\n");
-	updateRegionsID(size, regionIds, regionsAssociations);
+			buf.append("\t2. by size\n");
+			const int THRESHOLD_SIZE = (int)(size/1000.0f);
+			mergeBySize(regionCount, *regions, regionNeighbours, regionsAssociations, regionMin, thresholdSize);
 
-	delete [] imageYCbCr;
-	delete [] imageSeed;
-	delete [] regionNeighbours;
-	delete [] regionsAssociations;
+			// update regionsIds
+			buf.append("updating region IDs\n");
+			updateRegionsID(size, regionIds, regionsAssociations);
 
-	return regionCount;
+			delete [] imageYCbCr;
+			delete [] imageSeed;
+			delete [] regionNeighbours;
+			delete [] regionsAssociations;
+			buf.append("\nDone computing regions.\n");
+			regionsDone = true;
+			threadDone = true;
+		}
+	);
+}
+
+
+void computeRegions(int h, int w, const unsigned char * image, int * regionIds, Region ** regions, float thresholdAvg, float thresholdSize)
+{
+	if (!startedThread)
+	{
+		computeRegionsThreaded(h, w, image, regionIds, regions, thresholdAvg, thresholdSize);
+	}
+	else if (!threadDone)
+	{
+		delete renderThread;
+		computeRegionsThreaded(h, w, image, regionIds, regions, thresholdAvg, thresholdSize);
+	}
 }
 
 // Main code
@@ -220,12 +287,11 @@ int main(int argc, char** argv)
 	static int selected_item = 0;
 	GLuint textureLeft = -1;
 	GLuint textureRight = -1;
-	bool regionsDone = false;
 	int regionsCount = 0;
 	float thresholdAvg = 0.1f;
 	int thresholdSize = 500;
 	ImVec2 imageDisplaySize(500, 500);
-	ImGuiTextBuffer log;
+	bool computingRegions = false;
 
 
 	// create texture
@@ -254,6 +320,47 @@ int main(int argc, char** argv)
 	// Main loop
 	while (!glfwWindowShouldClose(window))
 	{
+		if (startedThread && threadDone)
+		{
+			delete renderThread;
+			startedThread = false;
+			if (!computingRegions)
+			{
+				glBindTexture(GL_TEXTURE_2D, textureRight);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, imageOut);
+			}
+			else
+			{
+				computingRegions = false;
+
+				startedThread = true;
+				threadDone = false;
+
+				HarmonyType type = textToHarmonyType({items[selected_item]});
+				ColorHSV hsv{};
+				rgb_to_hsv({clear_color.x, clear_color.y, clear_color.z}, hsv);
+				float hue = hsv.h;
+
+				renderThread = new std::jthread(
+					[auto_harmo, type, hue, h, w, imageIn, imageOut, regions, regionIDs]()
+					{
+						if (auto_harmo)
+						{
+							buf.append("Shifting with k-mean.\n");
+							KMeanShiftRegions(type, h, w, imageIn, imageOut, regions, regionIDs);
+						}
+						else
+						{
+							buf.append("Shifting with given color.\n");
+							shiftColorRegions(hue, type, h, w, imageIn, imageOut, regions, regionIDs);
+						}
+						buf.append("\nDone.\n");
+						threadDone = true;
+					}
+				);
+			}
+		}
+
 		// Poll and handle events (inputs, window resize, etc.)
 		// You can read the io.WantCaptureMouse, io.WantCaptureKeyboard flags to tell if dear imgui wants to use your inputs.
 		// - When io.WantCaptureMouse is true, do not dispatch mouse input data to your main application, or clear/overwrite your copy of the mouse data.
@@ -341,7 +448,9 @@ int main(int argc, char** argv)
 			if (ImGui::ColorEdit3("Couleur", (float*)&clear_color))
 			{
 				if (!auto_harmo)
+				{
 					updatePreview(clear_color, w, h, imageIn, imageOut, items, selected_item, textureRight, auto_harmo);
+				}
 			}
 			ImGui::Text("Choix du template");
 			ImGui::SetNextItemWidth(200);
@@ -361,21 +470,39 @@ int main(int argc, char** argv)
 				if (!regionsDone)
 				{
 					regionIDs = new int[size];
-					regionsCount = computeRegions(h, w, imageIn, regionIDs, &regions, log, thresholdAvg, size*1.0f/(float)thresholdSize);
-					regionsDone = true;
-				}
-				if (auto_harmo)
-				{
-					KMeanShiftRegions(textToHarmonyType({items[selected_item]}), h, w, imageIn, imageOut, regions, regionIDs);
+					computingRegions = true;
+					computeRegions(h, w, imageIn, regionIDs, &regions, thresholdAvg, size*1.0f/(float)thresholdSize);
 				}
 				else
 				{
+					computingRegions = false;
+
+					startedThread = true;
+					threadDone = false;
+
+					HarmonyType type = textToHarmonyType({items[selected_item]});
 					ColorHSV hsv{};
 					rgb_to_hsv({clear_color.x, clear_color.y, clear_color.z}, hsv);
-					shiftColorRegions(hsv.h, textToHarmonyType({items[selected_item]}), h, w, imageIn, imageOut, regions, regionIDs);
+					float hue = hsv.h;
+
+					renderThread = new std::jthread(
+						[auto_harmo, type, hue, h, w, imageIn, imageOut, regions, regionIDs]()
+						{
+							if (auto_harmo)
+							{
+								buf.append("Shifting with k-mean.\n");
+								KMeanShiftRegions(type, h, w, imageIn, imageOut, regions, regionIDs);
+							}
+							else
+							{
+								buf.append("Shifting with given color.\n");
+								shiftColorRegions(hue, type, h, w, imageIn, imageOut, regions, regionIDs);
+							}
+							buf.append("\nDone.\n");
+							threadDone = true;
+						}
+					);
 				}
-				glBindTexture(GL_TEXTURE_2D, textureRight);
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, imageOut);
 			}
 			ImGui::SameLine();
 			if (ImGui::Button("Enregistrer sous..."))
@@ -421,7 +548,11 @@ int main(int argc, char** argv)
 
 			ImGui::BeginChild("##");
 			{
-				ImGui::TextUnformatted(log.begin());
+				if (buf.size() > 0)
+				{
+					ImGui::TextUnformatted(buf.begin());
+				}
+				ImGui::SetScrollHereY(1.0f);
 			}
 			ImGui::EndChild();
 			//ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
